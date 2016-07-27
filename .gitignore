@@ -1,0 +1,5 @@
+# Ignore changes in compiled objects
+/bin/
+
+# Ignore files in data directory
+# /data/*
