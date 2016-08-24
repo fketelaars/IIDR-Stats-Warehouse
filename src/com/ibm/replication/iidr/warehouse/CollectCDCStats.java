@@ -299,7 +299,7 @@ public class CollectCDCStats {
 
 		// Only set arguments when testing
 		if (args.length == 1 && args[0].equalsIgnoreCase("*Testing*")) {
-			args = "-ds CDC_DB2".split(" ");
+			args = "-d -ds CDC_DB2".split(" ");
 		}
 		try {
 			new CollectCDCStats(args);

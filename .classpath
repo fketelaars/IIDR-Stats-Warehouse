@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
 	<classpathentry kind="src" path="src"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/CDC_Access_Server_11.3.3"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/Apache_Downloaded"/>
+	<classpathentry kind="lib" path="/home/nl45056/Documents/Development/#JDBC/db2jcc4.jar"/>
+	<classpathentry kind="lib" path="/home/nl45056/Documents/Development/#JDBC/db2jcc_license_cisuz.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/CDC_Access_Server_11.3.3"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
