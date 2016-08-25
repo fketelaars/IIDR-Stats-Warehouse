@@ -25,8 +25,9 @@ package com.ibm.replication.iidr.warehouse;
 
 import java.io.File;
 import java.net.MalformedURLException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
-import java.util.List;
 
 import org.apache.commons.configuration.*;
 import org.apache.log4j.Logger;
@@ -56,7 +57,8 @@ public class Settings {
 	String dbSchema;
 	String sqlUrl;
 
-	List<Object> metricID;
+	String ignoreMetrics;
+	ArrayList<String> ignoreMetricsList;
 
 	/**
 	 * Retrieve the settings from the given properties file.
@@ -89,6 +91,9 @@ public class Settings {
 		dbDriverName = config.getString("dbDriverName");
 		dbUrl = config.getString("dbUrl");
 		dbSchema = config.getString("dbSchema");
+
+		ignoreMetrics = config.getString("ignoreMetrics");
+		ignoreMetricsList = new ArrayList<String>(Arrays.asList(ignoreMetrics.split(",")));
 
 		// Check if the password has already been encrypted
 		// If not, encrypt and save the properties

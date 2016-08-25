@@ -62,6 +62,8 @@ public class CollectCDCStats {
 	// Database connection parameters
 
 	Connection con = null;
+	PreparedStatement insertSubStatus;
+	PreparedStatement insertSubMetrics;
 
 	static Logger logger;
 
@@ -111,6 +113,14 @@ public class CollectCDCStats {
 
 	private boolean connectServerDS() {
 		boolean success = true;
+		// try {
+		// logger.debug("Trying to disconnect from Access Server, not a problem
+		// if this fails");
+		// script.execute("disconnect server");
+		// } catch (EmbeddedScriptException e) {
+		// logger.debug("Disconnect from Access Server failed, you can ignore
+		// this");
+		// }
 		try {
 			logger.info("Connecting to the access server " + settings.asHostName);
 			script.execute("connect server hostname " + settings.asHostName + " port " + settings.asPort + " username "
@@ -178,9 +188,9 @@ public class CollectCDCStats {
 
 		con.setAutoCommit(false);
 
-		PreparedStatement insertSubStatus = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_SUB_STATUS "
+		insertSubStatus = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_SUB_STATUS "
 				+ "(SOURCE_DATASTORE,SUBSCRIPTION,COLLECT_TS,SUBSCRIPTION_STATUS) " + "VALUES (?,?,?,?)");
-		PreparedStatement insertSubMetrics = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_STATS_ALL "
+		insertSubMetrics = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_STATS_ALL "
 				+ "(SOURCE_DATASTORE,SUBSCRIPTION,COLLECT_TS,SOURCE_TARGET,METRIC_ID,METRIC_VALUE) "
 				+ "VALUES (?,?,?,?,?,?)");
 
@@ -190,26 +200,41 @@ public class CollectCDCStats {
 
 		try {
 			// Subscription routine
-			logger.info("Get list of subscriptions");
+			logger.debug("Get list of subscriptions");
 			script.execute("list subscriptions filter datastore");
 			result = script.getResult();
 			ResultStringTable subscriptionList = (ResultStringTable) result;
 			for (int i = 0; i < subscriptionList.getRowCount(); i++) {
 				String subscriptionName = subscriptionList.getValueAt(i, "SUBSCRIPTION");
 				String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
-				// If target datastore different from source, connect to it
-				if (!parms.datastore.equals(targetDatastore)) {
-					try {
-						script.execute("connect datastore name " + targetDatastore + " context target");
-					} catch (EmbeddedScriptException e) {
-						logger.error("Could not connect to target datastore " + targetDatastore + ", error: "
-								+ e.getResultCodeAndMessage());
-						logger.error("Statistics of subscription " + subscriptionName + " will not be collected");
-						continue;
-					}
-				}
+				// Collect status and metrics for subscription
+				collectSubscriptionInfo(collectTimestamp, subscriptionName, targetDatastore);
+			}
+		} catch (EmbeddedScriptException e) {
+			logger.error("Failed to monitor replication, will reconnect to Access Server and Datastore. Error message: "
+					+ e.getResultCodeAndMessage());
+			connectServer = true;
+		}
+	}
+
+	private void collectSubscriptionInfo(Timestamp collectTimestamp, String subscriptionName, String targetDatastore) {
+		logger.info("Collecting status and statistics for subscription " + subscriptionName + ", replicating from "
+				+ parms.datastore + " to " + targetDatastore);
+		boolean targetConnected = true;
+		// If target datastore different from source, connect to it
+		if (!parms.datastore.equals(targetDatastore)) {
+			try {
+				script.execute("connect datastore name " + targetDatastore + " context target");
+			} catch (EmbeddedScriptException e) {
+				logger.error("Could not connect to target datastore " + targetDatastore + ", error: "
+						+ e.getResultCodeAndMessage());
+				logger.error("Statistics of subscription " + subscriptionName + " will not be collected");
+				targetConnected = false;
+			}
+		}
+		if (targetConnected) {
+			try {
 				script.execute("select subscription name " + subscriptionName);
-				logger.info("Collecting status and statistics for subscription " + subscriptionName);
 				script.execute("monitor replication filter subscription");
 				ResultStringTable subscriptionStatus = (ResultStringTable) script.getResult();
 				String subscriptionState = subscriptionStatus.getValueAt(0, "STATE");
@@ -234,9 +259,12 @@ public class CollectCDCStats {
 						if (availableMetrics.getValueAt(r, 1).isEmpty()) {
 							currentGroup = availableMetrics.getValueAt(r, 0);
 						} else {
-							metricIDList.add(availableMetrics.getValueAt(r, 1));
-							metricDescriptionMap.put(currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
-									Integer.parseInt(availableMetrics.getValueAt(r, 1)));
+							if (! settings.ignoreMetricsList.contains(availableMetrics.getValueAt(r, 1))) {
+								metricIDList.add(availableMetrics.getValueAt(r, 1));
+								metricDescriptionMap.put(
+										currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
+										Integer.parseInt(availableMetrics.getValueAt(r, 1)));
+							}
 						}
 					}
 					logger.debug("Metrics defined (" + metricIDList.size() + "): " + metricIDList);
@@ -273,26 +301,30 @@ public class CollectCDCStats {
 					logger.info("Current state for subscription " + subscriptionName + ": "
 							+ subscriptionStatus.getValueAt(0, "STATE"));
 				}
-
-				// If there was a target datastore that was connected to,
-				// disconnect
-				if (!parms.datastore.equals(targetDatastore)) {
-					script.execute("disconnect datastore name " + targetDatastore);
-				}
-
 				// Commit the transaction per subscription
 				con.commit();
+			} catch (EmbeddedScriptException e) {
+				logger.error("Error collecting status or statistics from subscription " + subscriptionName + ". Error: "
+						+ e.getResultCodeAndMessage());
+			} catch (SQLException sqle) {
+				logger.error("SQL Exception: " + sqle.getMessage());
+				disconnectDatabase();
+				connectServer = true;
 			}
 
-		} catch (EmbeddedScriptException e) {
-			logger.error("Failed to monitor replication, will reconnect to Access Server and Datastore. Error message: "
-					+ e.getResultCodeAndMessage());
-			connectServer = true;
-		} catch (SQLException sqle) {
-			logger.error("SQL Exception: " + sqle.getMessage());
-			disconnectDatabase();
-			connectServer = true;
-		} 
+		}
+
+		// If there was a target datastore that was connected to,
+		// disconnect
+		if (!parms.datastore.equals(targetDatastore)) {
+			try {
+				script.execute("disconnect datastore name " + targetDatastore);
+			} catch (EmbeddedScriptException e) {
+				logger.debug(
+						"Error disconnecting from target datastore " + targetDatastore + ", you can ignore this error");
+			}
+		}
+
 	}
 
 	public static void main(String[] args) {
