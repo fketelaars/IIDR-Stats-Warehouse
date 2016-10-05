@@ -163,8 +163,8 @@ public class Settings {
 
 	public static void main(String[] args)
 			throws ConfigurationException, IllegalArgumentException, IllegalAccessException, MalformedURLException {
-		System.setProperty("log4j.configuration",
-				new File(".", File.separatorChar + "conf" + File.separatorChar + "log4j.properties").toURI().toURL()
+		System.setProperty("log4j.configurationFile",
+				new File(".", File.separatorChar + "conf" + File.separatorChar + "log4j2.xml").toURI().toURL()
 						.toString());
 		LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
 		Configuration config = ctx.getConfiguration();
