@@ -71,25 +71,24 @@ public class CollectCDCStats {
 			throws ConfigurationException, EmbeddedScriptException, IllegalAccessException, InstantiationException,
 			ClassNotFoundException, SQLException, IOException, CollectCDCStatsParmsException {
 
+		parms = new CollectCDCStatsParms(commandLineArguments);
+
+		// Set Log4j properties
 		System.setProperty("log4j.configurationFile",
 				new File(".", File.separatorChar + "conf" + File.separatorChar + "log4j2.xml").toURI().toURL()
 						.toString());
 		logger = LogManager.getLogger(CollectCDCStats.class.getName());
-
-		settings = new Settings("conf" + File.separator + "CollectCDCStats.properties");
-
-		parms = new CollectCDCStatsParms(commandLineArguments);
-
-		// If the debug option was set, make sure that all debug messages are
-		// logged
+		// Debug logging?
 		if (parms.debug) {
 			LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
 			Configuration config = ctx.getConfiguration();
-			LoggerConfig loggerConfig = config.getLoggerConfig(LogManager.ROOT_LOGGER_NAME);
+			LoggerConfig loggerConfig = config.getLoggerConfig("com.ibm.replication.iidr");
 			loggerConfig.setLevel(Level.DEBUG);
 			ctx.updateLoggers();
 			// LogManager.getRootLogger().setLevel(Level.DEBUG);
 		}
+
+		settings = new Settings("conf" + File.separator + "CollectCDCStats.properties");
 
 		// Create a script object to be used to execute CHCCLP commands
 		script = new EmbeddedScript();

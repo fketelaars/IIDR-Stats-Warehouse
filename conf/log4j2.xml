@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="debug">
+<Configuration status="error">
 	<Properties>
 		<Property name="log-path">log</Property>
 	</Properties>
@@ -23,10 +23,11 @@
 		</Console>
 	</Appenders>
 	<Loggers>
-		<Logger name="com.mycuteblog" level="info" additivity="false">
-			<appender-ref ref="file-log" level="info" />
+		<Logger name="com.ibm.replication.iidr" level="info"
+			additivity="false">
+			<appender-ref ref="console" />
 		</Logger>
-		<Root level="info" additivity="false">
+		<Root level="debug" additivity="false">
 			<appender-ref ref="console" />
 		</Root>
 	</Loggers>

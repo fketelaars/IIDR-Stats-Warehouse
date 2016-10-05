@@ -168,7 +168,7 @@ public class Settings {
 						.toString());
 		LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
 		Configuration config = ctx.getConfiguration();
-		LoggerConfig loggerConfig = config.getLoggerConfig(LogManager.ROOT_LOGGER_NAME);
+		LoggerConfig loggerConfig = config.getLoggerConfig("com.ibm.replication.iidr.utils.Settings");
 		loggerConfig.setLevel(Level.DEBUG);
 		ctx.updateLoggers();
 		new Settings("conf/CollectCDCStats.properties");
