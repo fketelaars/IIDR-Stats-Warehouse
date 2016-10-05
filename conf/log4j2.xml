@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="debug">
+	<Properties>
+		<Property name="log-path">log</Property>
+	</Properties>
+
+	<Appenders>
+		<RollingFile name="file-log" fileName="${log-path}/CollectCDCStats.log"
+			filePattern="${log-path}/CollectCDCStats-%d{yyyy-MM-dd}.log">
+			<PatternLayout>
+				<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%-5level] %c{1} - %msg%n
+				</pattern>
+			</PatternLayout>
+			<Policies>
+				<TimeBasedTriggeringPolicy interval="1"
+					modulate="true" />
+			</Policies>
+		</RollingFile>
+
+		<Console name="console" target="SYSTEM_OUT">
+			<PatternLayout
+				pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%-5level] %c{1} - %msg%n" />
+		</Console>
+	</Appenders>
+	<Loggers>
+		<Logger name="com.mycuteblog" level="info" additivity="false">
+			<appender-ref ref="file-log" level="info" />
+		</Logger>
+		<Root level="info" additivity="false">
+			<appender-ref ref="console" />
+		</Root>
+	</Loggers>
+</Configuration>
+

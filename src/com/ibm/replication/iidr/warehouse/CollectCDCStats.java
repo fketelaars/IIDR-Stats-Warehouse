@@ -24,28 +24,29 @@
 package com.ibm.replication.iidr.warehouse;
 
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedHashMap;
-import java.util.Properties;
 
 import java.io.File;
 
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.lang.StringUtils;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.LoggerConfig;
 
 import com.ibm.replication.cdc.scripting.EmbeddedScript;
 import com.ibm.replication.cdc.scripting.EmbeddedScriptException;
 import com.ibm.replication.cdc.scripting.Result;
 import com.ibm.replication.cdc.scripting.ResultStringTable;
+import com.ibm.replication.iidr.utils.Settings;
+import com.ibm.replication.iidr.warehouse.logging.LogDatabase;
 
 public class CollectCDCStats {
 
@@ -57,15 +58,12 @@ public class CollectCDCStats {
 
 	Settings settings;
 
-	boolean connectServer = true;
-
-	// Database connection parameters
-
-	Connection con = null;
-	PreparedStatement insertSubStatus;
-	PreparedStatement insertSubMetrics;
+	boolean connectAccessServer = true;
+	boolean connectDatabase = true;
 
 	static Logger logger;
+
+	LogDatabase logDatabase;
 
 	private volatile boolean keepOn = true;
 
@@ -73,10 +71,10 @@ public class CollectCDCStats {
 			throws ConfigurationException, EmbeddedScriptException, IllegalAccessException, InstantiationException,
 			ClassNotFoundException, SQLException, IOException, CollectCDCStatsParmsException {
 
-		System.setProperty("log4j.configuration",
-				new File(".", File.separatorChar + "conf" + File.separatorChar + "log4j.properties").toURI().toURL()
+		System.setProperty("log4j.configurationFile",
+				new File(".", File.separatorChar + "conf" + File.separatorChar + "log4j2.xml").toURI().toURL()
 						.toString());
-		logger = Logger.getLogger(CollectCDCStats.class.getName());
+		logger = LogManager.getLogger(CollectCDCStats.class.getName());
 
 		settings = new Settings("conf" + File.separator + "CollectCDCStats.properties");
 
@@ -85,7 +83,12 @@ public class CollectCDCStats {
 		// If the debug option was set, make sure that all debug messages are
 		// logged
 		if (parms.debug) {
-			Logger.getRootLogger().setLevel(Level.DEBUG);
+			LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
+			Configuration config = ctx.getConfiguration();
+			LoggerConfig loggerConfig = config.getLoggerConfig(LogManager.ROOT_LOGGER_NAME);
+			loggerConfig.setLevel(Level.DEBUG);
+			ctx.updateLoggers();
+			// LogManager.getRootLogger().setLevel(Level.DEBUG);
 		}
 
 		// Create a script object to be used to execute CHCCLP commands
@@ -93,7 +96,7 @@ public class CollectCDCStats {
 		try {
 			script.open();
 			while (keepOn) {
-				listSubscriptions();
+				processSubscriptions();
 				logger.info("Sleeping for " + settings.checkFrequencySeconds + " seconds");
 				Thread.sleep(settings.checkFrequencySeconds * 1000);
 			}
@@ -103,24 +106,15 @@ public class CollectCDCStats {
 		} catch (InterruptedException e) {
 			logger.info("Stop of program requested");
 		} catch (Exception e2) {
-			logger.error("TableInfo : " + e2.getMessage());
+			logger.error("Error while collecting status and statistics: " + e2.getMessage());
 		} finally {
 			script.close();
-			con.close();
+			if (settings.logToDatabase)
+				logDatabase.finish();
 		}
-
 	}
 
-	private boolean connectServerDS() {
-		boolean success = true;
-		// try {
-		// logger.debug("Trying to disconnect from Access Server, not a problem
-		// if this fails");
-		// script.execute("disconnect server");
-		// } catch (EmbeddedScriptException e) {
-		// logger.debug("Disconnect from Access Server failed, you can ignore
-		// this");
-		// }
+	private void connectServerDS() {
 		try {
 			logger.info("Connecting to the access server " + settings.asHostName);
 			script.execute("connect server hostname " + settings.asHostName + " port " + settings.asPort + " username "
@@ -130,69 +124,25 @@ public class CollectCDCStats {
 		} catch (EmbeddedScriptException e) {
 			logger.error("Failed to connect to access server or datastore: " + script.getResultMessage());
 			logger.error("Result Code : " + script.getResultCode());
-			success = false;
-		}
-		return success;
-	}
-
-	private void connectDatabase()
-			throws SQLException, IOException, IllegalAccessException, InstantiationException, ClassNotFoundException {
-
-		try {
-			Properties props = new Properties();
-			props.put("user", settings.dbUserName);
-			props.put("password", settings.dbPassword);
-			logger.debug("Database URL: " + settings.dbUrl);
-			Class.forName(settings.dbDriverName).newInstance();
-			con = DriverManager.getConnection(settings.dbUrl, props);
-
-			logger.debug(settings.dbDriverName + " Loading");
-			logger.debug("Connecting to url : " + settings.dbUrl + " using user name " + settings.dbUserName);
-			DatabaseMetaData dbmd = con.getMetaData();
-			logger.debug("DatabaseProductName: " + dbmd.getDatabaseProductName());
-			logger.debug("DatabaseProductVersion: " + dbmd.getDatabaseProductVersion());
-
-		} catch (SQLException esql) {
-			logger.error(esql.toString());
-			con.close();
-		} catch (ClassNotFoundException esql) {
-			logger.error(esql.toString());
-			con.close();
-		} catch (Exception e) {
-			logger.error("Connecting to database failed, error: " + e.toString());
 		}
 	}
 
-	private void disconnectDatabase() {
-		try {
-			con.rollback();
-		} catch (SQLException ignore) {
-		}
-		try {
-			con.close();
-		} catch (SQLException ignore) {
-		}
-
-	}
-
-	private void listSubscriptions()
+	private void processSubscriptions()
 			throws IllegalAccessException, InstantiationException, ClassNotFoundException, SQLException, IOException {
 
 		// If this is the first time, or when a connection error has occurred,
 		// connect to Access Server and the source datastore
-		if (connectServer) {
+		if (connectAccessServer) {
 			connectServerDS();
-			connectDatabase();
-			connectServer = false;
+			connectAccessServer = false;
 		}
 
-		con.setAutoCommit(false);
-
-		insertSubStatus = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_SUB_STATUS "
-				+ "(SOURCE_DATASTORE,SUBSCRIPTION,COLLECT_TS,SUBSCRIPTION_STATUS) " + "VALUES (?,?,?,?)");
-		insertSubMetrics = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_STATS_ALL "
-				+ "(SOURCE_DATASTORE,SUBSCRIPTION,COLLECT_TS,SOURCE_TARGET,METRIC_ID,METRIC_VALUE) "
-				+ "VALUES (?,?,?,?,?,?)");
+		// If this is the first time, or when a database error has occurred,
+		// re-establish the connection to the database
+		if (connectDatabase && settings.logToDatabase) {
+			logDatabase = new LogDatabase(settings);
+			connectDatabase = false;
+		}
 
 		// Get current timestamp
 		Calendar cal = Calendar.getInstance();
@@ -213,7 +163,7 @@ public class CollectCDCStats {
 		} catch (EmbeddedScriptException e) {
 			logger.error("Failed to monitor replication, will reconnect to Access Server and Datastore. Error message: "
 					+ e.getResultCodeAndMessage());
-			connectServer = true;
+			connectAccessServer = true;
 		}
 	}
 
@@ -224,6 +174,7 @@ public class CollectCDCStats {
 		// If target datastore different from source, connect to it
 		if (!parms.datastore.equals(targetDatastore)) {
 			try {
+				logger.debug("Connecting to target datastore " + targetDatastore);
 				script.execute("connect datastore name " + targetDatastore + " context target");
 			} catch (EmbeddedScriptException e) {
 				logger.error("Could not connect to target datastore " + targetDatastore + ", error: "
@@ -233,85 +184,7 @@ public class CollectCDCStats {
 			}
 		}
 		if (targetConnected) {
-			try {
-				script.execute("select subscription name " + subscriptionName);
-				script.execute("monitor replication filter subscription");
-				ResultStringTable subscriptionStatus = (ResultStringTable) script.getResult();
-				String subscriptionState = subscriptionStatus.getValueAt(0, "STATE");
-
-				logger.debug("State of subscription " + subscriptionName + " is " + subscriptionState);
-
-				// Now insert the subscription state into the table
-				insertSubStatus.setString(1, parms.datastore);
-				insertSubStatus.setString(2, subscriptionName);
-				insertSubStatus.setTimestamp(3, collectTimestamp);
-				insertSubStatus.setString(4, subscriptionState);
-				insertSubStatus.execute();
-
-				if (subscriptionStatus.getValueAt(0, "STATE").startsWith("Mirror")) {
-					// Which performance metrics are available
-					script.execute("list subscription performance metrics name " + subscriptionName);
-					ResultStringTable availableMetrics = (ResultStringTable) script.getResult();
-					ArrayList<String> metricIDList = new ArrayList<String>();
-					LinkedHashMap<String, Integer> metricDescriptionMap = new LinkedHashMap<String, Integer>();
-					String currentGroup = "";
-					for (int r = 0; r < availableMetrics.getRowCount(); r++) {
-						if (availableMetrics.getValueAt(r, 1).isEmpty()) {
-							currentGroup = availableMetrics.getValueAt(r, 0);
-						} else {
-							if (! settings.ignoreMetricsList.contains(availableMetrics.getValueAt(r, 1))) {
-								metricIDList.add(availableMetrics.getValueAt(r, 1));
-								metricDescriptionMap.put(
-										currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
-										Integer.parseInt(availableMetrics.getValueAt(r, 1)));
-							}
-						}
-					}
-					logger.debug("Metrics defined (" + metricIDList.size() + "): " + metricIDList);
-					String metricIDs = StringUtils.join(metricIDList, ",");
-
-					logger.debug("Metrics map" + metricDescriptionMap);
-
-					// Now get the metrics
-
-					script.execute("monitor subscription performance name " + subscriptionName + " metricIDs \""
-							+ metricIDs + "\"");
-					ResultStringTable metrics = (ResultStringTable) script.getResult();
-					logger.debug("Number of metrics retrieved: " + metrics.getRowCount());
-
-					String metricSourceTarget = "";
-					for (int r = 0; r < metrics.getRowCount(); r++) {
-						String metric = metrics.getValueAt(r, 0).trim();
-						if (metric.equals("Source") || metric.equals("Target")) {
-							metricSourceTarget = metric.substring(0, 1);
-						} else {
-							Integer metricID = metricDescriptionMap.get(metric);
-							logger.debug(r + " : " + metricSourceTarget + " - " + metricID + " - " + metric + " - "
-									+ metrics.getValueAt(r, 1));
-							insertSubMetrics.setString(1, parms.datastore);
-							insertSubMetrics.setString(2, subscriptionName);
-							insertSubMetrics.setTimestamp(3, collectTimestamp);
-							insertSubMetrics.setString(4, metricSourceTarget);
-							insertSubMetrics.setInt(5, metricID);
-							insertSubMetrics.setLong(6, Long.parseLong(metrics.getValueAt(r, 1).replaceAll(",", "")));
-							insertSubMetrics.execute();
-						}
-					}
-				} else {
-					logger.info("Current state for subscription " + subscriptionName + ": "
-							+ subscriptionStatus.getValueAt(0, "STATE"));
-				}
-				// Commit the transaction per subscription
-				con.commit();
-			} catch (EmbeddedScriptException e) {
-				logger.error("Error collecting status or statistics from subscription " + subscriptionName + ". Error: "
-						+ e.getResultCodeAndMessage());
-			} catch (SQLException sqle) {
-				logger.error("SQL Exception: " + sqle.getMessage());
-				disconnectDatabase();
-				connectServer = true;
-			}
-
+			logSubscription(subscriptionName, collectTimestamp);
 		}
 
 		// If there was a target datastore that was connected to,
@@ -322,6 +195,99 @@ public class CollectCDCStats {
 			} catch (EmbeddedScriptException e) {
 				logger.debug(
 						"Error disconnecting from target datastore " + targetDatastore + ", you can ignore this error");
+			}
+		}
+	}
+
+	/**
+	 * Log subscription status, metrics and event log
+	 */
+	private void logSubscription(String subscriptionName, Timestamp collectTimestamp) {
+		try {
+			script.execute("select subscription name " + subscriptionName);
+			script.execute("monitor replication filter subscription");
+			ResultStringTable subscriptionStatus = (ResultStringTable) script.getResult();
+
+			logSubscriptionStatus(subscriptionName, collectTimestamp, subscriptionStatus);
+
+			if (subscriptionStatus.getValueAt(0, "STATE").startsWith("Mirror"))
+				logSubscriptionMetrics(subscriptionName, collectTimestamp, subscriptionStatus);
+			else
+				logger.info("Current state for subscription " + subscriptionName + ": "
+						+ subscriptionStatus.getValueAt(0, "STATE"));
+
+			// Harden the metrics that have been logged
+			if (settings.logToDatabase)
+				logDatabase.harden();
+		} catch (EmbeddedScriptException e) {
+			logger.error("Error collecting status or statistics from subscription " + subscriptionName + ". Error: "
+					+ e.getResultCodeAndMessage());
+		} catch (SQLException sqle) {
+			logger.error("SQL Exception: " + sqle.getMessage() + ". Will attempt to reconnect to the database");
+			connectDatabase = true;
+		}
+	}
+
+	/**
+	 * Log the subscription status
+	 */
+	private void logSubscriptionStatus(String subscriptionName, Timestamp collectTimestamp,
+			ResultStringTable subscriptionStatus) throws SQLException {
+		String subscriptionState = subscriptionStatus.getValueAt(0, "STATE");
+		logger.debug("State of subscription " + subscriptionName + " is " + subscriptionState);
+		// Now insert the subscription state into the table
+		if (settings.logToDatabase) {
+			logDatabase.logSubscriptionStatus(parms.datastore, subscriptionName, collectTimestamp, subscriptionState);
+		}
+	}
+
+	/**
+	 * Log the subscription metrics
+	 */
+	private void logSubscriptionMetrics(String subscriptionName, Timestamp collectTimestamp,
+			ResultStringTable subscriptionStatus) throws EmbeddedScriptException, SQLException {
+		// Which performance metrics are available
+		script.execute("list subscription performance metrics name " + subscriptionName);
+		ResultStringTable availableMetrics = (ResultStringTable) script.getResult();
+		ArrayList<String> metricIDList = new ArrayList<String>();
+		LinkedHashMap<String, Integer> metricDescriptionMap = new LinkedHashMap<String, Integer>();
+		String currentGroup = "";
+		for (int r = 0; r < availableMetrics.getRowCount(); r++) {
+			if (availableMetrics.getValueAt(r, 1).isEmpty()) {
+				currentGroup = availableMetrics.getValueAt(r, 0);
+			} else {
+				if (!settings.ignoreMetricsList.contains(availableMetrics.getValueAt(r, 1))) {
+					metricIDList.add(availableMetrics.getValueAt(r, 1));
+					metricDescriptionMap.put(currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
+							Integer.parseInt(availableMetrics.getValueAt(r, 1)));
+				}
+			}
+		}
+
+		String metricIDs = StringUtils.join(metricIDList, ",");
+
+		logger.debug("Metrics map: " + metricDescriptionMap);
+
+		// Now get the metrics
+
+		script.execute(
+				"monitor subscription performance name " + subscriptionName + " metricIDs \"" + metricIDs + "\"");
+		ResultStringTable metrics = (ResultStringTable) script.getResult();
+		logger.debug("Number of metrics retrieved: " + metrics.getRowCount());
+
+		String metricSourceTarget = "";
+		for (int r = 0; r < metrics.getRowCount(); r++) {
+			String metric = metrics.getValueAt(r, 0).trim();
+			if (metric.equals("Source") || metric.equals("Target")) {
+				metricSourceTarget = metric.substring(0, 1);
+			} else {
+				Integer metricID = metricDescriptionMap.get(metric);
+				logger.debug(r + " : " + metricSourceTarget + " - " + metricID + " - " + metric + " - "
+						+ metrics.getValueAt(r, 1));
+				long metricValue = Long.parseLong(metrics.getValueAt(r, 1).replaceAll(",", ""));
+				if (settings.logToDatabase)
+					logDatabase.logMetrics(parms.datastore, subscriptionName, collectTimestamp, metricSourceTarget,
+							metricID, metricValue);
 			}
 		}
 
