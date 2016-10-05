@@ -70,7 +70,6 @@ public class Settings {
 
 	// CSV logging parameters
 	public boolean logToCSV = false;
-	public String statsDirectory;
 
 	String ignoreMetrics;
 	public ArrayList<String> ignoreMetricsList;
@@ -142,7 +141,6 @@ public class Settings {
 
 		// CSV logging settings
 		logToCSV = config.getBoolean("logToCSV", logToCSV);
-		statsDirectory = config.getString("statsDirectory");
 
 		// Now report the settings
 		logSettings(config);

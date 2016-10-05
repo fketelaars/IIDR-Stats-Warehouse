@@ -46,6 +46,7 @@ import com.ibm.replication.cdc.scripting.EmbeddedScriptException;
 import com.ibm.replication.cdc.scripting.Result;
 import com.ibm.replication.cdc.scripting.ResultStringTable;
 import com.ibm.replication.iidr.utils.Settings;
+import com.ibm.replication.iidr.warehouse.logging.LogCsv;
 import com.ibm.replication.iidr.warehouse.logging.LogDatabase;
 
 public class CollectCDCStats {
@@ -64,6 +65,7 @@ public class CollectCDCStats {
 	static Logger logger;
 
 	LogDatabase logDatabase;
+	LogCsv logCsv;
 
 	private volatile boolean keepOn = true;
 
@@ -143,6 +145,10 @@ public class CollectCDCStats {
 			connectDatabase = false;
 		}
 
+		// Log to CSV if specified
+		if (settings.logToCSV)
+			logCsv = new LogCsv(settings);
+
 		// Get current timestamp
 		Calendar cal = Calendar.getInstance();
 		Timestamp collectTimestamp = new Timestamp(cal.getTimeInMillis());
@@ -218,6 +224,8 @@ public class CollectCDCStats {
 			// Harden the metrics that have been logged
 			if (settings.logToDatabase)
 				logDatabase.harden();
+			if (settings.logToCSV)
+				logCsv.harden();
 		} catch (EmbeddedScriptException e) {
 			logger.error("Error collecting status or statistics from subscription " + subscriptionName + ". Error: "
 					+ e.getResultCodeAndMessage());
@@ -235,9 +243,10 @@ public class CollectCDCStats {
 		String subscriptionState = subscriptionStatus.getValueAt(0, "STATE");
 		logger.debug("State of subscription " + subscriptionName + " is " + subscriptionState);
 		// Now insert the subscription state into the table
-		if (settings.logToDatabase) {
+		if (settings.logToDatabase)
 			logDatabase.logSubscriptionStatus(parms.datastore, subscriptionName, collectTimestamp, subscriptionState);
-		}
+		if (settings.logToCSV)
+			logCsv.logSubscriptionStatus(parms.datastore, subscriptionName, collectTimestamp, subscriptionState);
 	}
 
 	/**
@@ -287,6 +296,9 @@ public class CollectCDCStats {
 				if (settings.logToDatabase)
 					logDatabase.logMetrics(parms.datastore, subscriptionName, collectTimestamp, metricSourceTarget,
 							metricID, metricValue);
+				if (settings.logToCSV)
+					logCsv.logMetrics(parms.datastore, subscriptionName, collectTimestamp, metricSourceTarget, metricID,
+							metricValue);
 			}
 		}
 
