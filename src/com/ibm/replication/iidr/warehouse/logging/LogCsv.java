@@ -11,10 +11,18 @@ import com.ibm.replication.iidr.utils.Settings;
 public class LogCsv extends LogInterface {
 
 	Logger csvLogger;
+	String statusHeader = null;
+	String metricsHeader = null;
 
 	public LogCsv(Settings settings) {
 		super(settings);
 		csvLogger = LogManager.getLogger(this.getClass());
+		ThreadContext.put("separator", settings.csvSeparator);
+		statusHeader = "dataStore" + settings.csvSeparator + "subscriptionName" + settings.csvSeparator
+				+ "collectTimestamp" + settings.csvSeparator + "subscriptionState";
+		metricsHeader = "dataStore" + settings.csvSeparator + "subscriptionName" + settings.csvSeparator
+				+ "collectTimestamp" + settings.csvSeparator + "metricSourceTarget" + settings.csvSeparator + "metricID"
+				+ settings.csvSeparator + "metricValue";
 	}
 
 	/**
@@ -27,6 +35,7 @@ public class LogCsv extends LogInterface {
 		ThreadContext.put("dataStore", dataStore);
 		ThreadContext.put("subscriptionName", subscriptionName);
 		ThreadContext.put("type", "SubStatus");
+		ThreadContext.put("header", statusHeader);
 		csvLogger.info("test", dataStore, subscriptionName, collectTimestamp, subscriptionState);
 	}
 
@@ -39,6 +48,7 @@ public class LogCsv extends LogInterface {
 		ThreadContext.put("dataStore", dataStore);
 		ThreadContext.put("subscriptionName", subscriptionName);
 		ThreadContext.put("type", "Statistics");
+		ThreadContext.put("header", metricsHeader);
 		csvLogger.info("ignore", dataStore, subscriptionName, collectTimestamp, metricSourceTarget, metricID,
 				metricValue);
 	}

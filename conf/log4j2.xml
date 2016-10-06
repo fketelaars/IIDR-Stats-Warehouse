@@ -35,14 +35,18 @@
 			and allow for flexibility in the naming and location of the logs files. ${ctx:type} 
 			is the type of the data that is being written, SubStatus, Statistics or EventLog. 
 			${ctx:dataStore} is the name of the source datastore for which subscriptions 
-			are monitored. ${ctx:subscriptionName} holds the name of the subscription -->
+			are monitored. ${ctx:subscriptionName} holds the name of the subscription. 
+			${ctx:header} holds the header row to be placed at the start of each new 
+			CSV file (if wanted). Finally ${ctx:separator} is the separator character 
+			used in the CSV records -->
 		<Routing name="csvRouting">
 			<Routes pattern="${ctx:dataStore}-${ctx:type}">
 				<Route>
 					<RollingFile name="${ctx:dataStore}-${ctx:type}"
 						fileName="${stats-path}/${ctx:dataStore}-${ctx:type}.csv"
 						filePattern="${stats-path}/${ctx:dataStore}-${ctx:type}-%d{yyyy-MM-dd-HH}.csv.gz">
-						<CsvParameterLayout delimiter="|" />
+						<CsvParameterLayout delimiter="${ctx:separator}"
+							header="${ctx:header}" />
 						<Policies>
 							<TimeBasedTriggeringPolicy interval="1"
 								modulate="true" />
@@ -64,7 +68,7 @@
 			<appender-ref ref="console" />
 			<appender-ref ref="file-log" />
 		</Logger>
-		
+
 		<!-- The com.ibm.replication.iidr.warehouse.logging.LogCsv logger takes 
 			care of logging CSV records of Subscription Status, Statistics and Event 
 			logs -->
@@ -72,7 +76,7 @@
 			level="info" additivity="false">
 			<appender-ref ref="csvRouting" />
 		</Logger>
-		
+
 		<Root level="debug" additivity="false">
 			<appender-ref ref="console" />
 		</Root>
