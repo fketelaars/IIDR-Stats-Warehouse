@@ -136,7 +136,10 @@ public class Settings {
 
 		// Metrics to include
 		includeMetrics = config.getString("includeMetrics");
-		includeMetricsList = new ArrayList<String>(Arrays.asList(includeMetrics.split(",")));
+		if (includeMetrics.isEmpty())
+			includeMetricsList = new ArrayList<String>();
+		else
+			includeMetricsList = new ArrayList<String>(Arrays.asList(includeMetrics.split(",")));
 
 		// Metrics to exclude
 		excludeMetrics = config.getString("excludeMetrics");

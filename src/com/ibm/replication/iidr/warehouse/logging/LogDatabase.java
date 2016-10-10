@@ -132,15 +132,36 @@ public class LogDatabase extends LogInterface {
 	 * @throws SQLException
 	 */
 	@Override
-	public void logEvent(String dataStore, String subscriptionName, String sourceTarget, String eventID,
-			String eventType, String eventTimestamp, String eventMessage) throws SQLException {
+	public void logEvent(String dataStore, String subscriptionName, String sourceTarget, String eventIDString,
+			String eventType, String eventTimestampString, String eventMessage) throws SQLException {
 		// Only try to insert the status if the connection has been established
 		if (con != null) {
 			if (insertEvents == null)
 				insertEvents = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_EVENTS "
-						+ "(SRC_DATASTORE,SUBSCRIPTION,SRC_TGT,EVENT_ID,EVENT_TYPE,EVENT_TIMSTAMP,EVENT_MESSAGE) "
+						+ "(SRC_DATASTORE,SUBSCRIPTION,SRC_TGT,EVENT_ID,EVENT_TYPE,EVENT_TIMESTAMP,EVENT_MESSAGE) "
 						+ "VALUES (?,?,?,?,?,?,?)");
+		} 
+		
+		// Try to convert event ID to integer
+		int eventID=0;
+		try {
+		eventID=Integer.parseInt(eventIDString);
+		} catch(NumberFormatException e) {
+			logger.error("Error converting event ID "+eventIDString+" to numeric, will be set to 0");
 		}
+		
+		// Try to convert event timestamp to Timestamp
+		Timestamp eventTimestamp=Timestamp.valueOf(eventTimestampString);
+		
+		// Write the event into the table
+		insertEvents.setString(1, dataStore);
+		insertEvents.setString(2, subscriptionName);
+		insertEvents.setString(3, sourceTarget);
+		insertEvents.setInt(4, eventID);
+		insertEvents.setString(5, eventType);
+		insertEvents.setTimestamp(6, eventTimestamp);
+		insertEvents.setString(7, eventMessage);
+		insertEvents.execute();
 	}
 
 	/**

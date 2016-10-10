@@ -289,7 +289,7 @@ public class CollectCDCStats {
 				// Only include metric if in include list and not in exclude
 				// list
 				if ((settings.includeMetricsList.isEmpty()
-						|| settings.includeMetricsList.contains(metricDescriptionMap))
+						|| settings.includeMetricsList.contains(metricID))
 						&& !settings.excludeMetricsList.contains(metricID)) {
 					metricIDList.add(availableMetrics.getValueAt(r, 1));
 					metricDescriptionMap.put(currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
@@ -341,19 +341,19 @@ public class CollectCDCStats {
 		// Log source datastore events
 		script.execute("list datastore events type source count " + settings.numberOfEvents);
 		ResultStringTable sourceDataStoreEvents = (ResultStringTable) script.getResult();
-		processEvents(sourceDataStoreEvents, sourceDatastore, null, "Source");
+		processEvents(sourceDataStoreEvents, sourceDatastore, null, "S");
 
 		script.execute("list datastore events type target");
 		ResultStringTable targetDataStoreEvents = (ResultStringTable) script.getResult();
-		processEvents(targetDataStoreEvents, targetDatastore, null, "Target");
+		processEvents(targetDataStoreEvents, targetDatastore, null, "T");
 
 		script.execute("list subscription events type source");
 		ResultStringTable sourceSubscriptionEvents = (ResultStringTable) script.getResult();
-		processEvents(sourceSubscriptionEvents, sourceDatastore, subscriptionName, "Source");
+		processEvents(sourceSubscriptionEvents, sourceDatastore, subscriptionName, "S");
 
 		script.execute("list subscription events type target");
 		ResultStringTable targetSubscriptionEvents = (ResultStringTable) script.getResult();
-		processEvents(targetSubscriptionEvents, sourceDatastore, subscriptionName, "Target");
+		processEvents(targetSubscriptionEvents, sourceDatastore, subscriptionName, "T");
 
 	}
 
