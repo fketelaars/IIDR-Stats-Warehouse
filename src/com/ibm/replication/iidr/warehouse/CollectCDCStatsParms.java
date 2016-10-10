@@ -34,10 +34,8 @@ public class CollectCDCStatsParms {
 
 	public boolean debug;
 	public String datastore;
-	public boolean previewOnly;
-	public boolean xmlFileOutput;
 	public String subscription;
-	public boolean updateBundle;
+	public String propertiesFile;
 
 	public CollectCDCStatsParms(String[] commandLineArguments) throws CollectCDCStatsParmsException {
 		// Initialize parameters
@@ -51,6 +49,7 @@ public class CollectCDCStatsParms {
 		options.addOption("d", false, "");
 		options.addOption(Option.builder("ds").hasArg().build());
 		options.addOption(Option.builder("s").hasArg().build());
+		options.addOption(Option.builder("p").hasArg().build());
 
 		try {
 			commandLine = parser.parse(options, commandLineArguments);
@@ -66,6 +65,10 @@ public class CollectCDCStatsParms {
 			if (commandLine.getOptionValue("s") != null) {
 				subscription = commandLine.getOptionValue("s");
 			}
+			if (commandLine.getOptionValue("p") != null) {
+				propertiesFile = commandLine.getOptionValue("p");
+			} else
+				propertiesFile = "CollectCDCStats.properties";
 
 		} else
 			sendInvalidParameterException("Datastore (ds parameter) must be specified");

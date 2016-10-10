@@ -44,17 +44,16 @@ Dependent on whether you want to log subscription status, metrics and event logs
 For logging into CSV files, please refer to the `conf/log4j2.xml` configuration file which determines in which directory and file names the CSV logging records will be written. By default, the log records are written into 3 different types of files: Statistics (for the metrics), SubStatus (for the subscription status) and Events (for the datastore and subscription events. Statistics, status and events are collected in log files which are zipped and archived every 1 hour and automatically removed after 7 days. By changing the properties in the `conf/log4j2.xml` file, you can fully control in which directory files are kept and even keep events and metrics from different datastores in different directory structures. Please refer to the ([http://logging.apache.org/log4j/2.x/manual/appenders.html](http://logging.apache.org/log4j/2.x/manual/appenders.html)) for more information.
 
 
-
-
 ## Usage
 Once the tool has been configured, you can perform collect the statistics using the shell/command script that is provided in the utility's home directory.
 
-* Linux/Unix: `CollectCDCStats.sh -ds <source datastore> [-s subscription(s)] [-d]`
+* Linux/Unix: `CollectCDCStats.sh -ds <source datastore> [-s subscription(s)] [-p <properties file>] [-d]`
 
 
 ### Parameters
 - ds: Specifies the source datastore of the subscriptons you wish to export.
 - s: Optional. Specifies which subscriptions you wish to monitor. Multiple subscriptions can be specified, separated by commas. If you do not specify this parameter, all subscriptions sourcing the specified datastore will be monitored.
+- p: Optional. Specifies the name of the properties file from which the configuration will be read. This properties file must exist in the `conf` directory. By default, the `CollectCDCStats.properties` file is used.
 - d: Optional. Displays debug messages for troubleshooting.
 
 ### Command example

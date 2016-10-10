@@ -94,7 +94,7 @@ public class CollectCDCStats {
 		}
 
 		// Load settings
-		settings = new Settings("CollectCDCStats.properties");
+		settings = new Settings(parms.propertiesFile);
 
 		// Check if the event log bookmarks will be used
 		if (settings.logEventsToDB || settings.logEventsToCsv) {
