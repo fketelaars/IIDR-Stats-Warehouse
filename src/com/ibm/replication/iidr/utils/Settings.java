@@ -24,7 +24,8 @@
 package com.ibm.replication.iidr.utils;
 
 import java.io.File;
-import java.net.MalformedURLException;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -46,9 +47,14 @@ public class Settings {
 
 	// Logging parameters
 	public int checkFrequencySeconds = 60;
-	public boolean logMetrics = true;
-	public boolean logSubscriptionStatus = true;
-	public boolean logEvents = true;
+	public boolean logMetricsToDB = true;
+	public boolean logSubscriptionStatusToDB = true;
+	public boolean logEventsToDB = false;
+	public boolean logMetricsToCsv = false;
+	public boolean logSubscriptionStatusToCsv = false;
+	public boolean logEventsToCsv = true;
+
+	public int numberOfEvents = 500;
 
 	// Access Server connection parameters
 	public String asHostName = null;
@@ -57,7 +63,6 @@ public class Settings {
 	public int asPort = 0;
 
 	// Database connection parameters
-	public boolean logToDatabase = true;
 	public String dbHostName;
 	public int dbPort;
 	public String dbDatabase;
@@ -69,33 +74,47 @@ public class Settings {
 	public String sqlUrl;
 
 	// CSV logging parameters
-	public boolean logToCSV = false;
 	public String csvSeparator = "|";
 
-	String ignoreMetrics;
-	public ArrayList<String> ignoreMetricsList;
+	// Which metrics to include/exclude
+	String includeMetrics;
+	public ArrayList<String> includeMetricsList;
+	String excludeMetrics;
+	public ArrayList<String> excludeMetricsList;
 
 	/**
 	 * Retrieve the settings from the given properties file.
 	 * 
 	 * @param propertiesFile
 	 * @throws ConfigurationException
-	 * @throws MalformedURLException
+	 * @throws IOException
+	 * @throws FileNotFoundException
 	 */
-	public Settings(String propertiesFile) throws ConfigurationException, MalformedURLException {
+	public Settings(String propertiesFile) throws ConfigurationException, FileNotFoundException, IOException {
 
-		System.setProperty("log4j.configuration",
-				new File(".", File.separatorChar + "conf" + File.separatorChar + "log4j.properties").toURI().toURL()
-						.toString());
-		logger = LogManager.getLogger(Settings.class.getName());
+		logger = LogManager.getLogger();
+		loadProperties(propertiesFile);
+	}
 
-		PropertiesConfiguration config = new PropertiesConfiguration(propertiesFile);
+	/**
+	 * Load the properties
+	 */
+	private void loadProperties(String propertiesFile) throws ConfigurationException {
+		PropertiesConfiguration config = new PropertiesConfiguration(
+				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separator + propertiesFile);
 
 		checkFrequencySeconds = config.getInt("checkFrequencySeconds");
 
-		logMetrics = config.getBoolean("logMetrics", logMetrics);
-		logSubscriptionStatus = config.getBoolean("logSubscriptionStatus", logSubscriptionStatus);
-		logEvents = config.getBoolean("logEvents", logEvents);
+		logMetricsToDB = config.getBoolean("logMetricsToDB", logMetricsToDB);
+		logSubscriptionStatusToDB = config.getBoolean("logSubscriptionStatusToDB", logSubscriptionStatusToDB);
+		logEventsToDB = config.getBoolean("logEventsToDB", logEventsToDB);
+
+		logMetricsToCsv = config.getBoolean("logMetricsToCsv", logMetricsToCsv);
+		logSubscriptionStatusToCsv = config.getBoolean("logSubscriptionStatusToCsv", logSubscriptionStatusToCsv);
+		logEventsToCsv = config.getBoolean("logEventsToCsv", logEventsToCsv);
+
+		// Number of events to retrieve
+		numberOfEvents = config.getInt("numberOfEvents", numberOfEvents);
 
 		// Access Server settings
 		asHostName = config.getString("asHostName");
@@ -115,12 +134,15 @@ public class Settings {
 			config.save();
 		}
 
-		// Metrics to ignore
-		ignoreMetrics = config.getString("ignoreMetrics");
-		ignoreMetricsList = new ArrayList<String>(Arrays.asList(ignoreMetrics.split(",")));
+		// Metrics to include
+		includeMetrics = config.getString("includeMetrics");
+		includeMetricsList = new ArrayList<String>(Arrays.asList(includeMetrics.split(",")));
+
+		// Metrics to exclude
+		excludeMetrics = config.getString("excludeMetrics");
+		excludeMetricsList = new ArrayList<String>(Arrays.asList(excludeMetrics.split(",")));
 
 		// Database connection settings
-		logToDatabase = config.getBoolean("logToDatabase", logToDatabase);
 		dbHostName = config.getString("dbHostName");
 		dbPort = config.getInt("dbPort");
 		dbDatabase = config.getString("dbDatabase");
@@ -141,7 +163,6 @@ public class Settings {
 		}
 
 		// CSV logging settings
-		logToCSV = config.getBoolean("logToCSV", logToCSV);
 		csvSeparator = config.getString("csvSeparator", csvSeparator);
 
 		// Now report the settings
@@ -161,17 +182,16 @@ public class Settings {
 		}
 	}
 
-	public static void main(String[] args)
-			throws ConfigurationException, IllegalArgumentException, IllegalAccessException, MalformedURLException {
+	public static void main(String[] args) throws ConfigurationException, IllegalArgumentException,
+			IllegalAccessException, FileNotFoundException, IOException {
 		System.setProperty("log4j.configurationFile",
-				new File(".", File.separatorChar + "conf" + File.separatorChar + "log4j2.xml").toURI().toURL()
-						.toString());
+				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separatorChar + "log4j2.xml");
 		LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
 		Configuration config = ctx.getConfiguration();
 		LoggerConfig loggerConfig = config.getLoggerConfig("com.ibm.replication.iidr.utils.Settings");
 		loggerConfig.setLevel(Level.DEBUG);
 		ctx.updateLoggers();
-		new Settings("conf/CollectCDCStats.properties");
+		new Settings("CollectCDCStats.properties");
 	}
 
 }

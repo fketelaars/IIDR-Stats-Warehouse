@@ -30,6 +30,8 @@ Update the `conf/CollectCDCStats.properties` file with your favourite editor and
 * asHostName: Host name or IP address of the server running the Access Server.
 * asUserName: User name to connect to the Access Server.
 * asPassword: Password for the Access Server user. Please specify the password in its readable format; when the utility runs it will automatically encrypt the password and update the property.
+
+Dependent on whether you want to log subscription status, metrics and event logs in database tables and/or comma-separated value files, you need to set the properties to connect to the database. The database properties are:
 * dbHostName: Host name or IP address of the server running the database that will hold the statistics
 * dbPort: Port of the database
 * dbDatabase: Name of the database
@@ -38,6 +40,10 @@ Update the `conf/CollectCDCStats.properties` file with your favourite editor and
 * dbDriverName: Full name of the Java class that defines the database driver. For DB2 this is `com.ibm.db2.jcc.DB2Driver`
 * dbUrl: JDBC connection string to use. This string can contain properties from this property file by enclosing them in curly brackets and prefixing them with a $ sign. Example for DB2: `jdbc:db2://${dbHostName}:${dbPort}/${dbDatabase}`
 * dbSchema: Schema that holds the statistics and status tables
+
+For logging into CSV files, please refer to the `conf/log4j2.xml` configuration file which determines in which directory and file names the CSV logging records will be written. By default, the log records are written into 3 different types of files: Statistics (for the metrics), SubStatus (for the subscription status) and Events (for the datastore and subscription events. Statistics, status and events are collected in log files which are zipped and archived every 1 hour and automatically removed after 7 days. By changing the properties in the `conf/log4j2.xml` file, you can fully control in which directory files are kept and even keep events and metrics from different datastores in different directory structures. Please refer to the ([http://logging.apache.org/log4j/2.x/manual/appenders.html](http://logging.apache.org/log4j/2.x/manual/appenders.html)) for more information.
+
+
 
 
 ## Usage

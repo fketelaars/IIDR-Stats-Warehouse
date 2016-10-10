@@ -17,6 +17,7 @@ public class LogDatabase extends LogInterface {
 	private Connection con = null;
 	private PreparedStatement insertSubStatus;
 	private PreparedStatement insertSubMetrics;
+	private PreparedStatement insertEvents;
 
 	public LogDatabase(Settings settings)
 			throws IllegalAccessException, InstantiationException, ClassNotFoundException, IOException {
@@ -122,6 +123,23 @@ public class LogDatabase extends LogInterface {
 			insertSubMetrics.setInt(5, metricID);
 			insertSubMetrics.setLong(6, metricValue);
 			insertSubMetrics.execute();
+		}
+	}
+
+	/**
+	 * Logs the events into the database
+	 * 
+	 * @throws SQLException
+	 */
+	@Override
+	public void logEvent(String dataStore, String subscriptionName, String sourceTarget, String eventID,
+			String eventType, String eventTimestamp, String eventMessage) throws SQLException {
+		// Only try to insert the status if the connection has been established
+		if (con != null) {
+			if (insertEvents == null)
+				insertEvents = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_EVENTS "
+						+ "(SRC_DATASTORE,SUBSCRIPTION,SRC_TGT,EVENT_ID,EVENT_TYPE,EVENT_TIMSTAMP,EVENT_MESSAGE) "
+						+ "VALUES (?,?,?,?,?,?,?)");
 		}
 	}
 

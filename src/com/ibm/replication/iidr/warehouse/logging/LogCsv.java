@@ -13,6 +13,7 @@ public class LogCsv extends LogInterface {
 	Logger csvLogger;
 	String statusHeader = null;
 	String metricsHeader = null;
+	String eventsHeader=null;
 
 	public LogCsv(Settings settings) {
 		super(settings);
@@ -23,6 +24,9 @@ public class LogCsv extends LogInterface {
 		metricsHeader = "dataStore" + settings.csvSeparator + "subscriptionName" + settings.csvSeparator
 				+ "collectTimestamp" + settings.csvSeparator + "metricSourceTarget" + settings.csvSeparator + "metricID"
 				+ settings.csvSeparator + "metricValue";
+		eventsHeader = "dataStore" + settings.csvSeparator + "subscriptionName" + settings.csvSeparator
+				+ settings.csvSeparator + "sourceTarget" + settings.csvSeparator + "eventID" + settings.csvSeparator
+				+ "eventType" + settings.csvSeparator + "eventMessage";
 	}
 
 	/**
@@ -51,6 +55,17 @@ public class LogCsv extends LogInterface {
 		ThreadContext.put("header", metricsHeader);
 		csvLogger.info("ignore", dataStore, subscriptionName, collectTimestamp, metricSourceTarget, metricID,
 				metricValue);
+	}
+
+	@Override
+	public void logEvent(String dataStore, String subscriptionName, String sourceTarget, String eventID,
+			String eventType, String eventTimestamp, String eventMessage) {
+		ThreadContext.put("dataStore", dataStore);
+		ThreadContext.put("subscriptionName", subscriptionName);
+		ThreadContext.put("type", "Events");
+		ThreadContext.put("header", eventsHeader);
+		csvLogger.info("ignore", dataStore, subscriptionName, sourceTarget, eventID, eventType, eventTimestamp,
+				eventMessage);
 	}
 
 	/**

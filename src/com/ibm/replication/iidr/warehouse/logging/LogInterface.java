@@ -28,6 +28,12 @@ public abstract class LogInterface {
 	public abstract void logMetrics(String dataStore, String subscriptionName, Timestamp collectTimestamp,
 			String metricSourceTarget, int metricID, long metricValue) throws Exception;
 
+	/**
+	 * Log the events
+	 */
+	public abstract void logEvent(String dataStore, String subscriptionName, String sourceTarget, String eventID,
+			String eventType, String eventTimestamp, String eventMessage) throws Exception;
+
 	public abstract void harden() throws Exception;
 
 	public abstract void finish() throws Exception;

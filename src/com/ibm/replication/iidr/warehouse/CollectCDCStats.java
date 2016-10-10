@@ -31,6 +31,7 @@ import java.util.Calendar;
 import java.util.LinkedHashMap;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.lang.StringUtils;
@@ -45,7 +46,9 @@ import com.ibm.replication.cdc.scripting.EmbeddedScript;
 import com.ibm.replication.cdc.scripting.EmbeddedScriptException;
 import com.ibm.replication.cdc.scripting.Result;
 import com.ibm.replication.cdc.scripting.ResultStringTable;
+import com.ibm.replication.iidr.utils.Bookmarks;
 import com.ibm.replication.iidr.utils.Settings;
+import com.ibm.replication.iidr.utils.Utils;
 import com.ibm.replication.iidr.warehouse.logging.LogCsv;
 import com.ibm.replication.iidr.warehouse.logging.LogDatabase;
 
@@ -58,6 +61,7 @@ public class CollectCDCStats {
 	String sqlStatement;
 
 	Settings settings;
+	Bookmarks bookmarks;
 
 	boolean connectAccessServer = true;
 	boolean connectDatabase = true;
@@ -77,8 +81,7 @@ public class CollectCDCStats {
 
 		// Set Log4j properties
 		System.setProperty("log4j.configurationFile",
-				new File(".", File.separatorChar + "conf" + File.separatorChar + "log4j2.xml").toURI().toURL()
-						.toString());
+				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separatorChar + "log4j2.xml");
 		logger = LogManager.getLogger(CollectCDCStats.class.getName());
 		// Debug logging?
 		if (parms.debug) {
@@ -90,7 +93,13 @@ public class CollectCDCStats {
 			// LogManager.getRootLogger().setLevel(Level.DEBUG);
 		}
 
-		settings = new Settings("conf" + File.separator + "CollectCDCStats.properties");
+		// Load settings
+		settings = new Settings("CollectCDCStats.properties");
+
+		// Check if the event log bookmarks will be used
+		if (settings.logEventsToDB || settings.logEventsToCsv) {
+			bookmarks = new Bookmarks("EventLogBookmarks.properties");
+		}
 
 		// Create a script object to be used to execute CHCCLP commands
 		script = new EmbeddedScript();
@@ -110,7 +119,7 @@ public class CollectCDCStats {
 			logger.error("Error while collecting status and statistics: " + e2.getMessage());
 		} finally {
 			script.close();
-			if (settings.logToDatabase)
+			if (logDatabase != null)
 				logDatabase.finish();
 		}
 	}
@@ -140,13 +149,14 @@ public class CollectCDCStats {
 
 		// If this is the first time, or when a database error has occurred,
 		// re-establish the connection to the database
-		if (connectDatabase && settings.logToDatabase) {
+		if (connectDatabase
+				&& (settings.logEventsToDB || settings.logMetricsToDB || settings.logSubscriptionStatusToDB)) {
 			logDatabase = new LogDatabase(settings);
 			connectDatabase = false;
 		}
 
 		// Log to CSV if specified
-		if (settings.logToCSV)
+		if (settings.logEventsToCsv || settings.logMetricsToCsv || settings.logSubscriptionStatusToCsv)
 			logCsv = new LogCsv(settings);
 
 		// Get current timestamp
@@ -163,7 +173,7 @@ public class CollectCDCStats {
 				String subscriptionName = subscriptionList.getValueAt(i, "SUBSCRIPTION");
 				String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
 				// Collect status and metrics for subscription
-				collectSubscriptionInfo(collectTimestamp, subscriptionName, targetDatastore);
+				collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
 			}
 		} catch (EmbeddedScriptException e) {
 			logger.error("Failed to monitor replication, will reconnect to Access Server and Datastore. Error message: "
@@ -172,12 +182,13 @@ public class CollectCDCStats {
 		}
 	}
 
-	private void collectSubscriptionInfo(Timestamp collectTimestamp, String subscriptionName, String targetDatastore) {
+	private void collectSubscriptionInfo(Timestamp collectTimestamp, String subscriptionName, String datastore,
+			String targetDatastore) {
 		logger.info("Collecting status and statistics for subscription " + subscriptionName + ", replicating from "
-				+ parms.datastore + " to " + targetDatastore);
+				+ datastore + " to " + targetDatastore);
 		boolean targetConnected = true;
 		// If target datastore different from source, connect to it
-		if (!parms.datastore.equals(targetDatastore)) {
+		if (!datastore.equals(targetDatastore)) {
 			try {
 				logger.debug("Connecting to target datastore " + targetDatastore);
 				script.execute("connect datastore name " + targetDatastore + " context target");
@@ -189,7 +200,7 @@ public class CollectCDCStats {
 			}
 		}
 		if (targetConnected) {
-			logSubscription(subscriptionName, collectTimestamp);
+			logSubscription(subscriptionName, datastore, targetDatastore, collectTimestamp);
 		}
 
 		// If there was a target datastore that was connected to,
@@ -207,25 +218,35 @@ public class CollectCDCStats {
 	/**
 	 * Log subscription status, metrics and event log
 	 */
-	private void logSubscription(String subscriptionName, Timestamp collectTimestamp) {
+	private void logSubscription(String subscriptionName, String datastore, String targetDatastore,
+			Timestamp collectTimestamp) {
 		try {
 			script.execute("select subscription name " + subscriptionName);
 			script.execute("monitor replication filter subscription");
-			ResultStringTable subscriptionStatus = (ResultStringTable) script.getResult();
+			ResultStringTable subscriptionMonitor = (ResultStringTable) script.getResult();
 
-			logSubscriptionStatus(subscriptionName, collectTimestamp, subscriptionStatus);
+			String subscriptionState = subscriptionMonitor.getValueAt(0, "STATE");
 
-			if (subscriptionStatus.getValueAt(0, "STATE").startsWith("Mirror"))
-				logSubscriptionMetrics(subscriptionName, collectTimestamp, subscriptionStatus);
-			else
-				logger.info("Current state for subscription " + subscriptionName + ": "
-						+ subscriptionStatus.getValueAt(0, "STATE"));
+			if (settings.logSubscriptionStatusToDB || settings.logSubscriptionStatusToCsv)
+				logSubscriptionStatus(subscriptionName, collectTimestamp, subscriptionMonitor);
 
-			// Harden the metrics that have been logged
-			if (settings.logToDatabase)
-				logDatabase.harden();
-			if (settings.logToCSV)
-				logCsv.harden();
+			if (settings.logMetricsToDB || settings.logMetricsToCsv) {
+				if (subscriptionState.startsWith("Mirror"))
+					logSubscriptionMetrics(subscriptionName, collectTimestamp);
+				else
+					logger.info("Current state for subscription " + subscriptionName + ": " + subscriptionState
+							+ ", metrics not logged");
+
+				// Harden the metrics that have been logged
+				if (logDatabase != null)
+					logDatabase.harden();
+				if (logCsv != null)
+					logCsv.harden();
+			}
+
+			if (settings.logEventsToDB || settings.logEventsToCsv)
+				logEvents(subscriptionName, datastore, targetDatastore);
+
 		} catch (EmbeddedScriptException e) {
 			logger.error("Error collecting status or statistics from subscription " + subscriptionName + ". Error: "
 					+ e.getResultCodeAndMessage());
@@ -243,17 +264,17 @@ public class CollectCDCStats {
 		String subscriptionState = subscriptionStatus.getValueAt(0, "STATE");
 		logger.debug("State of subscription " + subscriptionName + " is " + subscriptionState);
 		// Now insert the subscription state into the table
-		if (settings.logToDatabase)
+		if (settings.logSubscriptionStatusToDB)
 			logDatabase.logSubscriptionStatus(parms.datastore, subscriptionName, collectTimestamp, subscriptionState);
-		if (settings.logToCSV)
+		if (settings.logSubscriptionStatusToCsv)
 			logCsv.logSubscriptionStatus(parms.datastore, subscriptionName, collectTimestamp, subscriptionState);
 	}
 
 	/**
 	 * Log the subscription metrics
 	 */
-	private void logSubscriptionMetrics(String subscriptionName, Timestamp collectTimestamp,
-			ResultStringTable subscriptionStatus) throws EmbeddedScriptException, SQLException {
+	private void logSubscriptionMetrics(String subscriptionName, Timestamp collectTimestamp)
+			throws EmbeddedScriptException, SQLException {
 		// Which performance metrics are available
 		script.execute("list subscription performance metrics name " + subscriptionName);
 		ResultStringTable availableMetrics = (ResultStringTable) script.getResult();
@@ -264,7 +285,12 @@ public class CollectCDCStats {
 			if (availableMetrics.getValueAt(r, 1).isEmpty()) {
 				currentGroup = availableMetrics.getValueAt(r, 0);
 			} else {
-				if (!settings.ignoreMetricsList.contains(availableMetrics.getValueAt(r, 1))) {
+				String metricID = availableMetrics.getValueAt(r, 1);
+				// Only include metric if in include list and not in exclude
+				// list
+				if ((settings.includeMetricsList.isEmpty()
+						|| settings.includeMetricsList.contains(metricDescriptionMap))
+						&& !settings.excludeMetricsList.contains(metricID)) {
 					metricIDList.add(availableMetrics.getValueAt(r, 1));
 					metricDescriptionMap.put(currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
 							Integer.parseInt(availableMetrics.getValueAt(r, 1)));
@@ -277,7 +303,6 @@ public class CollectCDCStats {
 		logger.debug("Metrics map: " + metricDescriptionMap);
 
 		// Now get the metrics
-
 		script.execute(
 				"monitor subscription performance name " + subscriptionName + " metricIDs \"" + metricIDs + "\"");
 		ResultStringTable metrics = (ResultStringTable) script.getResult();
@@ -293,14 +318,79 @@ public class CollectCDCStats {
 				logger.debug(r + " : " + metricSourceTarget + " - " + metricID + " - " + metric + " - "
 						+ metrics.getValueAt(r, 1));
 				long metricValue = Long.parseLong(metrics.getValueAt(r, 1).replaceAll(",", ""));
-				if (settings.logToDatabase)
+				if (settings.logMetricsToDB)
 					logDatabase.logMetrics(parms.datastore, subscriptionName, collectTimestamp, metricSourceTarget,
 							metricID, metricValue);
-				if (settings.logToCSV)
+				if (settings.logMetricsToCsv)
 					logCsv.logMetrics(parms.datastore, subscriptionName, collectTimestamp, metricSourceTarget, metricID,
 							metricValue);
 			}
 		}
+	}
+
+	/**
+	 * Log the subscription events
+	 * 
+	 * @throws EmbeddedScriptException
+	 * @throws IOException
+	 * @throws FileNotFoundException
+	 * @throws ConfigurationException
+	 */
+	private void logEvents(String subscriptionName, String sourceDatastore, String targetDatastore)
+			throws SQLException, EmbeddedScriptException {
+		// Log source datastore events
+		script.execute("list datastore events type source count " + settings.numberOfEvents);
+		ResultStringTable sourceDataStoreEvents = (ResultStringTable) script.getResult();
+		processEvents(sourceDataStoreEvents, sourceDatastore, null, "Source");
+
+		script.execute("list datastore events type target");
+		ResultStringTable targetDataStoreEvents = (ResultStringTable) script.getResult();
+		processEvents(targetDataStoreEvents, targetDatastore, null, "Target");
+
+		script.execute("list subscription events type source");
+		ResultStringTable sourceSubscriptionEvents = (ResultStringTable) script.getResult();
+		processEvents(sourceSubscriptionEvents, sourceDatastore, subscriptionName, "Source");
+
+		script.execute("list subscription events type target");
+		ResultStringTable targetSubscriptionEvents = (ResultStringTable) script.getResult();
+		processEvents(targetSubscriptionEvents, sourceDatastore, subscriptionName, "Target");
+
+	}
+
+	/**
+	 * Process the events that were collected and write them to the designated
+	 * destinations
+	 * 
+	 * @throws SQLException
+	 * @throws ArrayIndexOutOfBoundsException
+	 */
+	private void processEvents(ResultStringTable eventTable, String datastore, String subscriptionName,
+			String sourceTarget) throws SQLException {
+		String lastLoggedTimestamp = bookmarks.getEventBookmark(datastore, subscriptionName, sourceTarget);
+		// First find the events which a later timestamp than the bookmark
+		int lastRow = 0;
+		for (int r = 1; r < eventTable.getRowCount(); r++) {
+			String eventTimestamp = Utils.convertLogDateToIso(eventTable.getValueAt(r, "TIME"));
+			if (eventTimestamp.compareTo(lastLoggedTimestamp) > 0)
+				lastRow = r;
+		}
+		// Now that the earliest event to be logged has been found, start
+		// logging
+		for (int r = lastRow; r > 0; r--) {
+			String eventTimestamp = Utils.convertLogDateToIso(eventTable.getValueAt(r, "TIME"));
+			logger.debug("Event logged: " + datastore + "|" + subscriptionName + "|" + sourceTarget + "|"
+					+ eventTable.getValueAt(r, "EVENT ID") + "|" + eventTable.getValueAt(r, "TYPE") + "|"
+					+ eventTimestamp + "|" + eventTable.getValueAt(r, "MESSAGE"));
+			if (settings.logEventsToDB)
+				logDatabase.logEvent(datastore, subscriptionName, sourceTarget, eventTable.getValueAt(r, "EVENT ID"),
+						eventTable.getValueAt(r, "TYPE"), eventTimestamp, eventTable.getValueAt(r, "MESSAGE"));
+			if (settings.logEventsToCsv)
+				logCsv.logEvent(datastore, subscriptionName, sourceTarget, eventTable.getValueAt(r, "EVENT ID"),
+						eventTable.getValueAt(r, "TYPE"), eventTimestamp, eventTable.getValueAt(r, "MESSAGE"));
+			lastLoggedTimestamp = eventTimestamp;
+		}
+		// The lastLoggedTimestamp has been kept up to date, now update bookmark
+		bookmarks.writeEventBookmark(datastore, subscriptionName, sourceTarget, lastLoggedTimestamp);
 
 	}
 

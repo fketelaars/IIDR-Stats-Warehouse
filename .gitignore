@@ -6,3 +6,6 @@
 
 # Ignore log files
 /log/
+
+# Ignore bookmarks
+/conf/bookmarks
