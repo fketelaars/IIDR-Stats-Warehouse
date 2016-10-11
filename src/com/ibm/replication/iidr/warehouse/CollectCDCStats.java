@@ -76,13 +76,15 @@ public class CollectCDCStats {
 	public CollectCDCStats(String[] commandLineArguments)
 			throws ConfigurationException, EmbeddedScriptException, IllegalAccessException, InstantiationException,
 			ClassNotFoundException, SQLException, IOException, CollectCDCStatsParmsException {
-
-		parms = new CollectCDCStatsParms(commandLineArguments);
-
+		
 		// Set Log4j properties
 		System.setProperty("log4j.configurationFile",
 				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separatorChar + "log4j2.xml");
 		logger = LogManager.getLogger(CollectCDCStats.class.getName());
+
+		// Get and check parameters
+		parms = new CollectCDCStatsParms(commandLineArguments);
+
 		// Debug logging?
 		if (parms.debug) {
 			LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
@@ -398,7 +400,8 @@ public class CollectCDCStats {
 
 		// Only set arguments when testing
 		if (args.length == 1 && args[0].equalsIgnoreCase("*Testing*")) {
-			args = "-d -ds CDC_DB2".split(" ");
+			// args = "-d -ds CDC_DB2".split(" ");
+			args = "-d".split(" ");
 		}
 		try {
 			new CollectCDCStats(args);
