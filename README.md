@@ -5,7 +5,7 @@ In a world where businesses increasingly require timely access to current data b
 This toolkit captures the InfoSphere Data Replication CDC (CDC) metrics and status and stores them into fact tables in the database of choice. A number of views have been pre-defined for the most-common metrics one would want to monitor, but additional views can be created as well.
 
 ## Installation
-The GitHub repository contains all components required to run the CollectCDCStats utility, including the Apache Commons and Log4j jar files. Besides the CDC Access Server or CDC Management Console, no further programs are needed. Classes have been compiled with Java 1.8, the version that comes with CDC Access Server 11.3.3. 
+The GitHub repository contains all components required to run the CollectCDCStats utility, including the Apache Commons and Log4j jar files. Besides the CDC Access Server or CDC Management Console, no further programs are needed. Classes have been compiled with Java 1.8, the version that comes with CDC Access Server 11.3.3. Therefore, after download, the utility can be used as is, and no compilation is required.
 
 If you wish to use different versions of the included Apache projects, or use it with an older version of the CDC Access Server, please refer to the [Compilation](#compilation) section.
 
@@ -18,15 +18,15 @@ There is a strong dependency of the utility on CDC Access Server (or Management 
 
 ## Configuration
 In most scenarios you will need to perform two configuration tasks:
-- Update the configuration properties, reviewing the Access Server or Management Console path
+- Update the configuration properties, reviewing the Access Server or Management Console path. 
 - Update the credentials for the Access Server
 - Specify the database that will hold the statistics, along with the user and password to connect
-- Copy the database's JDBC driver into the utility's lib directory so that it is included in the classpath
-- Create the statistics and status fact tables and their views in the database. Sample scripts for various databases have been included in the conf directory.
+- If you output the statistics, status or logs to database tables, copy the database's JDBC driver into the utility's lib directory so that it is included in the classpath
+- Create the statistics, status and event log fact tables and their views in the database. Sample scripts for various databases have been included in the conf directory.
 
 ### Setting the configuration properties
 Update the `conf/CollectCDCStats.properties` file with your favourite editor and set the properties to reflect your environment. At a minimum, set the following properties:
-* CDC\_AS\_HOME: Home (main) directory of the Access Server or Management Console. This directory must have a `lib` subdirectory that holds the CHCCLP jar files and a directory with the Java Runtime Engine that will be used for the utility. If your directory path contains blanks or other special characters, please enclose the path in double quotes (").
+* CDC\_AS\_HOME: Home (main) directory of the Access Server or Management Console. This directory must have a `lib` subdirectory that holds the CHCCLP jar files and a directory with the Java Runtime Engine that will be used for the utility. If your directory path contains blanks or other special characters, please enclose the path in double quotes ("). If you run the utility on Windows, you would typically have to enclose the path in double quotes. Example: `CDC_AS_HOME="C:\Program Files (x86)\IBM\IS CDC MC 1133"`
 * asHostName: Host name or IP address of the server running the Access Server.
 * asUserName: User name to connect to the Access Server.
 * asPassword: Password for the Access Server user. Please specify the password in its readable format; when the utility runs it will automatically encrypt the password and update the property.
@@ -48,6 +48,7 @@ For logging into CSV files, please refer to the `conf/log4j2.xml` configuration 
 Once the tool has been configured, you can perform collect the statistics using the shell/command script that is provided in the utility's home directory.
 
 * Linux/Unix: `CollectCDCStats.sh -ds <source datastore> [-s subscription(s)] [-p <properties file>] [-d]`
+* Windows: `CollectCDCStats.cmd -ds <source datastore> [-s subscription(s)] [-p <properties file>] [-d]`
 
 
 ### Parameters
