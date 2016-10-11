@@ -62,11 +62,13 @@ public class Bookmarks {
 	 */
 	private void loadBookmarks(String bookmarksFileName)
 			throws ConfigurationException, FileNotFoundException, IOException {
-		String bookmarkFullFileName = System.getProperty("user.dir") + File.separatorChar + "conf" + File.separator
-				+ "bookmarks" + File.separator + bookmarksFileName;
+		String bookmarkDirFullName = System.getProperty("user.dir") + File.separatorChar + "conf" + File.separator
+				+ "bookmarks";
+		String bookmarkFullFileName = bookmarkDirFullName + File.separator + bookmarksFileName;
 		File bookmarkFile = new File(bookmarkFullFileName);
 		// Create the bookmark file if it doesn't exist
 		if (!bookmarkFile.exists()) {
+			new File(bookmarkDirFullName).mkdirs();
 			new FileOutputStream(bookmarkFullFileName, true).close();
 		}
 		// Get bookmarks
