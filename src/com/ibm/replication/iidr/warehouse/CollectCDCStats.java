@@ -26,10 +26,12 @@ package com.ibm.replication.iidr.warehouse;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.text.NumberFormat;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedHashMap;
-
+import java.util.Locale;
 import java.io.File;
 import java.io.FileNotFoundException;
 
@@ -71,12 +73,15 @@ public class CollectCDCStats {
 	LogDatabase logDatabase;
 	LogCsv logCsv;
 
+	Locale currentLocale;
+	NumberFormat localNumberFormat;
+
 	private volatile boolean keepOn = true;
 
 	public CollectCDCStats(String[] commandLineArguments)
 			throws ConfigurationException, EmbeddedScriptException, IllegalAccessException, InstantiationException,
 			ClassNotFoundException, SQLException, IOException, CollectCDCStatsParmsException {
-		
+
 		// Set Log4j properties
 		System.setProperty("log4j.configurationFile",
 				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separatorChar + "log4j2.xml");
@@ -92,11 +97,19 @@ public class CollectCDCStats {
 			LoggerConfig loggerConfig = config.getLoggerConfig("com.ibm.replication.iidr");
 			loggerConfig.setLevel(Level.DEBUG);
 			ctx.updateLoggers();
-			// LogManager.getRootLogger().setLevel(Level.DEBUG);
 		}
 
 		// Load settings
 		settings = new Settings(parms.propertiesFile);
+
+		// TODO Set locale hard-coded to avoid date conversion errors, to be fixed later
+		Locale.setDefault(new Locale("en", "US"));
+		
+		// Get current session's locale
+		currentLocale = Locale.getDefault();
+		logger.debug("Current locale (language_country): " + currentLocale.toString()
+				+ ", metrics will be parsed according to this locale");
+		localNumberFormat = NumberFormat.getInstance(currentLocale);
 
 		// Check if the event log bookmarks will be used
 		if (settings.logEventsToDB || settings.logEventsToCsv) {
@@ -263,6 +276,7 @@ public class CollectCDCStats {
 	 */
 	private void logSubscriptionStatus(String subscriptionName, Timestamp collectTimestamp,
 			ResultStringTable subscriptionStatus) throws SQLException {
+		logger.debug("Obtaining the state of subscription " + subscriptionName);
 		String subscriptionState = subscriptionStatus.getValueAt(0, "STATE");
 		logger.debug("State of subscription " + subscriptionName + " is " + subscriptionState);
 		// Now insert the subscription state into the table
@@ -277,6 +291,7 @@ public class CollectCDCStats {
 	 */
 	private void logSubscriptionMetrics(String subscriptionName, Timestamp collectTimestamp)
 			throws EmbeddedScriptException, SQLException {
+		logger.debug("Obtaining the metrics of subscription " + subscriptionName);
 		// Which performance metrics are available
 		script.execute("list subscription performance metrics name " + subscriptionName);
 		ResultStringTable availableMetrics = (ResultStringTable) script.getResult();
@@ -290,8 +305,7 @@ public class CollectCDCStats {
 				String metricID = availableMetrics.getValueAt(r, 1);
 				// Only include metric if in include list and not in exclude
 				// list
-				if ((settings.includeMetricsList.isEmpty()
-						|| settings.includeMetricsList.contains(metricID))
+				if ((settings.includeMetricsList.isEmpty() || settings.includeMetricsList.contains(metricID))
 						&& !settings.excludeMetricsList.contains(metricID)) {
 					metricIDList.add(availableMetrics.getValueAt(r, 1));
 					metricDescriptionMap.put(currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
@@ -317,15 +331,22 @@ public class CollectCDCStats {
 				metricSourceTarget = metric.substring(0, 1);
 			} else {
 				Integer metricID = metricDescriptionMap.get(metric);
-				logger.debug(r + " : " + metricSourceTarget + " - " + metricID + " - " + metric + " - "
-						+ metrics.getValueAt(r, 1));
-				long metricValue = Long.parseLong(metrics.getValueAt(r, 1).replaceAll(",", ""));
+				String metricValue = metrics.getValueAt(r, 1);
+				logger.debug(r + " : " + metricSourceTarget + " - " + metricID + " - " + metric + " - " + metricValue);
+				Number metricNumber;
+				try {
+					metricNumber = localNumberFormat.parse(metricValue);
+				} catch (ParseException e) {
+					logger.error("Error while parsing value for metric ID " + metricID + ", value is " + metricValue
+							+ ". Error: " + e.getMessage());
+					metricNumber = 0;
+				}
 				if (settings.logMetricsToDB)
 					logDatabase.logMetrics(parms.datastore, subscriptionName, collectTimestamp, metricSourceTarget,
-							metricID, metricValue);
+							metricID, (long) metricNumber);
 				if (settings.logMetricsToCsv)
 					logCsv.logMetrics(parms.datastore, subscriptionName, collectTimestamp, metricSourceTarget, metricID,
-							metricValue);
+							(long) metricNumber);
 			}
 		}
 	}
@@ -340,6 +361,7 @@ public class CollectCDCStats {
 	 */
 	private void logEvents(String subscriptionName, String sourceDatastore, String targetDatastore)
 			throws SQLException, EmbeddedScriptException {
+		logger.debug("Obtaining the log events of subscription " + subscriptionName);
 		// Log source datastore events
 		script.execute("list datastore events type source count " + settings.numberOfEvents);
 		ResultStringTable sourceDataStoreEvents = (ResultStringTable) script.getResult();
@@ -372,7 +394,8 @@ public class CollectCDCStats {
 		// First find the events which a later timestamp than the bookmark
 		int lastRow = 0;
 		for (int r = 1; r < eventTable.getRowCount(); r++) {
-			String eventTimestamp = Utils.convertLogDateToIso(eventTable.getValueAt(r, "TIME"));
+			String origEventTimestamp = eventTable.getValueAt(r, "TIME");
+			String eventTimestamp = Utils.convertLogDateToIso(origEventTimestamp);
 			if (eventTimestamp.compareTo(lastLoggedTimestamp) > 0)
 				lastRow = r;
 		}
@@ -400,8 +423,8 @@ public class CollectCDCStats {
 
 		// Only set arguments when testing
 		if (args.length == 1 && args[0].equalsIgnoreCase("*Testing*")) {
-			// args = "-d -ds CDC_DB2".split(" ");
-			args = "-d".split(" ");
+			args = "-d -ds CDC_DB2".split(" ");
+			// args = "-d".split(" ");
 		}
 		try {
 			new CollectCDCStats(args);
