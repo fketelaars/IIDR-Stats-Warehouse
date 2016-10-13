@@ -45,7 +45,7 @@
 	</path>
 
 	<target name="compile" depends="init">
-		<javac srcdir="${src.dir}" destdir="${build.dir}" source="1.6" target="1.6" debug="true" includeantruntime="no">
+		<javac srcdir="${src.dir}" destdir="${build.dir}" debug="true" includeantruntime="no">
 			<classpath>
 				<path refid="cp.apache" />
 				<path refid="cp.cdc_as" />
