@@ -29,6 +29,7 @@ import java.sql.Timestamp;
 import java.text.NumberFormat;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -36,6 +37,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
@@ -78,17 +80,19 @@ public class CollectCDCStats {
 
 	private volatile boolean keepOn = true;
 
-	public CollectCDCStats(String[] commandLineArguments)
+	public CollectCDCStats(CollectCDCStatsParms parms)
 			throws ConfigurationException, EmbeddedScriptException, IllegalAccessException, InstantiationException,
 			ClassNotFoundException, SQLException, IOException, CollectCDCStatsParmsException {
 
-		// Set Log4j properties
-		System.setProperty("log4j.configurationFile",
-				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separatorChar + "log4j2.xml");
-		logger = LogManager.getLogger(CollectCDCStats.class.getName());
+		this.parms = parms;
 
-		// Get and check parameters
-		parms = new CollectCDCStatsParms(commandLineArguments);
+		PropertiesConfiguration versionInfo = new PropertiesConfiguration(
+				"conf" + File.separator + "version.properties");
+
+		logger = LogManager.getLogger();
+
+		logger.info("Version: " + versionInfo.getString("buildVersion") + "." + versionInfo.getString("buildRelease")
+				+ "." + versionInfo.getString("buildMod") + ", date: " + versionInfo.getString("buildDate"));
 
 		// Debug logging?
 		if (parms.debug) {
@@ -102,9 +106,10 @@ public class CollectCDCStats {
 		// Load settings
 		settings = new Settings(parms.propertiesFile);
 
-		// TODO Set locale hard-coded to avoid date conversion errors, to be fixed later
+		// TODO Set locale hard-coded to avoid date conversion errors, to be
+		// fixed later
 		Locale.setDefault(new Locale("en", "US"));
-		
+
 		// Get current session's locale
 		currentLocale = Locale.getDefault();
 		logger.debug("Current locale (language_country): " + currentLocale.toString()
@@ -187,8 +192,12 @@ public class CollectCDCStats {
 			for (int i = 0; i < subscriptionList.getRowCount(); i++) {
 				String subscriptionName = subscriptionList.getValueAt(i, "SUBSCRIPTION");
 				String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
-				// Collect status and metrics for subscription
-				collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
+				// Collect status and metrics for subscription (if selected)
+				if (parms.subscriptionList == null || parms.subscriptionList.contains(subscriptionName))
+					collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
+				else
+					logger.debug(
+							"Subscription " + subscriptionName + " skipped, not in list of selected subscriptions");
 			}
 		} catch (EmbeddedScriptException e) {
 			logger.error("Failed to monitor replication, will reconnect to Access Server and Datastore. Error message: "
@@ -423,12 +432,32 @@ public class CollectCDCStats {
 
 		// Only set arguments when testing
 		if (args.length == 1 && args[0].equalsIgnoreCase("*Testing*")) {
-			args = "-d -ds CDC_DB2".split(" ");
+			// args = "-d -ds CDC_DB2".split(" ");
+			args = "-d -ds CDC_DB2 -s test".split(" ");
 			// args = "-d".split(" ");
 		}
+
+		// First check parameters
+		CollectCDCStatsParms parms = null;
 		try {
-			new CollectCDCStats(args);
+			// Get and check parameters
+			parms = new CollectCDCStatsParms(args);
+		} catch (CollectCDCStatsParmsException cpe) {
+			Logger logger = LogManager.getLogger();
+			logger.error("Error while validating parameters: " + cpe.getMessage());
+		}
+
+		// Set Log4j properties and get logger
+		System.setProperty("log4j.configurationFile", System.getProperty("user.dir") + File.separatorChar + "conf"
+				+ File.separatorChar + parms.loggingConfigurationFile);
+		Logger logger = LogManager.getLogger();
+
+		// Collect the statistics
+		try {
+			new CollectCDCStats(parms);
 		} catch (Exception e) {
+			// Report the full stack trace for debugging
+			logger.error(Arrays.toString(e.getStackTrace()));
 			logger.error("Error while collecting statistics from CDC: " + e.getMessage());
 		}
 	}
