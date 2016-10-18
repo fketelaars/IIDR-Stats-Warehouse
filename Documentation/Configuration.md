@@ -3,11 +3,7 @@ In most scenarios you will need to perform a few configuration tasks:
 - Update the configuration properties, reviewing the Access Server or Management Console path
 - Set the credentials for the CDC Access Server
 - If you are logging to database tables, set the database connection properties and run database configuration tasks
-- 
-- 
-- Specify the database that will hold the statistics, along with the user and password to connect
-- If you output the statistics, status or logs to database tables, copy the database's JDBC driver into the utility's lib directory so that it is included in the classpath
-- Create the statistics, status and event log fact tables and their views in the database. Sample scripts for various databases have been included in the conf directory.
+- If you are logging to flat files, set the logging properties
 
 ## Setting the configuration properties
 Update the `conf/CollectCDCStats.properties` file with your favourite editor and set the properties to reflect your environment.
