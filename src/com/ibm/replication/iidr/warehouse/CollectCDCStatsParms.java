@@ -23,6 +23,9 @@
 
 package com.ibm.replication.iidr.warehouse;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+
 import org.apache.commons.cli.*;
 
 public class CollectCDCStatsParms {
@@ -34,8 +37,10 @@ public class CollectCDCStatsParms {
 
 	public boolean debug;
 	public String datastore;
-	public String subscription;
+	private String subscriptions;
+	public ArrayList<String> subscriptionList;
 	public String propertiesFile;
+	public String loggingConfigurationFile;
 
 	public CollectCDCStatsParms(String[] commandLineArguments) throws CollectCDCStatsParmsException {
 		// Initialize parameters
@@ -44,12 +49,16 @@ public class CollectCDCStatsParms {
 		formatter = new HelpFormatter();
 		parser = new DefaultParser();
 		options = new Options();
-		subscription = null;
+		subscriptions = null;
 
-		options.addOption("d", false, "");
-		options.addOption(Option.builder("ds").hasArg().build());
-		options.addOption(Option.builder("s").hasArg().build());
-		options.addOption(Option.builder("p").hasArg().build());
+		options.addOption("d", false, "Show debug messages");
+		options.addOption("ds", true, "Source datastore");
+		options.addOption("s", true, "Subscription(s) to select. If not specified, all subscriptions"
+				+ " of the selected source datastore will be included");
+		options.addOption("p", true,
+				"Properties file (must exist in the conf directory). Default is CollectCDCStats.properties");
+		options.addOption("l", true,
+				"Log4j2 configuration file (must exist in the conf directory). Default is log4j2.xml");
 
 		try {
 			commandLine = parser.parse(options, commandLineArguments);
@@ -63,12 +72,18 @@ public class CollectCDCStatsParms {
 		if (commandLine.getOptionValue("ds") != null) {
 			datastore = commandLine.getOptionValue("ds");
 			if (commandLine.getOptionValue("s") != null) {
-				subscription = commandLine.getOptionValue("s");
+				subscriptions = commandLine.getOptionValue("s");
+				subscriptionList = new ArrayList<String>(Arrays.asList(subscriptions.split(",")));
 			}
 			if (commandLine.getOptionValue("p") != null) {
 				propertiesFile = commandLine.getOptionValue("p");
 			} else
 				propertiesFile = "CollectCDCStats.properties";
+
+			if (commandLine.getOptionValue("l") != null) {
+				loggingConfigurationFile = commandLine.getOptionValue("l");
+			} else
+				loggingConfigurationFile = "log4j2.xml";
 
 		} else
 			sendInvalidParameterException("Datastore (ds parameter) must be specified");
