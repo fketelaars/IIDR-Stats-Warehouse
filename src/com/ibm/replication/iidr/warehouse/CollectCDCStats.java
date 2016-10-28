@@ -433,7 +433,7 @@ public class CollectCDCStats {
 		// Only set arguments when testing
 		if (args.length == 1 && args[0].equalsIgnoreCase("*Testing*")) {
 			// args = "-d -ds CDC_DB2".split(" ");
-			args = "-d -ds CDC_DB2 -s test".split(" ");
+			args = "-d -ds CDC_DB2 -s CDC_BD,CDC_BS".split(" ");
 			// args = "-d".split(" ");
 		}
 

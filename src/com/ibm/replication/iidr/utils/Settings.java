@@ -77,9 +77,7 @@ public class Settings {
 	public String csvSeparator = "|";
 
 	// Which metrics to include/exclude
-	String includeMetrics;
 	public ArrayList<String> includeMetricsList;
-	String excludeMetrics;
 	public ArrayList<String> excludeMetricsList;
 
 	/**
@@ -135,15 +133,15 @@ public class Settings {
 		}
 
 		// Metrics to include
-		includeMetrics = config.getString("includeMetrics");
-		if (includeMetrics.isEmpty())
-			includeMetricsList = new ArrayList<String>();
-		else
-			includeMetricsList = new ArrayList<String>(Arrays.asList(includeMetrics.split(",")));
+		// if (includeMetrics.isEmpty())
+		// includeMetricsList = new ArrayList<String>();
+		// else
+		includeMetricsList = new ArrayList<String>(Arrays.asList(config.getStringArray("includeMetrics")));
+		includeMetricsList.removeAll(Arrays.asList(""));
 
 		// Metrics to exclude
-		excludeMetrics = config.getString("excludeMetrics");
-		excludeMetricsList = new ArrayList<String>(Arrays.asList(excludeMetrics.split(",")));
+		excludeMetricsList = new ArrayList<String>(Arrays.asList(config.getStringArray("excludeMetrics")));
+		excludeMetricsList.removeAll(Arrays.asList(""));
 
 		// Database connection settings
 		dbHostName = config.getString("dbHostName");
