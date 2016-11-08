@@ -46,7 +46,7 @@
 						fileName="${stats-path}/${ctx:dataStore}-${ctx:type}.csv"
 						filePattern="${stats-path}/${ctx:dataStore}-${ctx:type}-%d{yyyy-MM-dd-HH}.csv.gz">
 						<CsvParameterLayout delimiter="${ctx:separator}"
-							header="${ctx:header}" />
+							header="${ctx:header}${sys:line.separator}" />
 						<Policies>
 							<TimeBasedTriggeringPolicy interval="1"
 								modulate="true" />

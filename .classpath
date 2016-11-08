@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
 	<classpathentry kind="src" path="src"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/Apache_Downloaded"/>
 	<classpathentry kind="lib" path="/home/nl45056/Documents/Development/#JDBC/db2jcc4.jar"/>
 	<classpathentry kind="lib" path="/home/nl45056/Documents/Development/#JDBC/db2jcc_license_cisuz.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/CDC_Access_Server_11.3.3"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="/home/nl45056/Documents/Development/#JDBC/ojdbc6.jar"/>
+	<classpathentry kind="lib" path="lib/downloaded/commons-cli-1.3.1.jar"/>
+	<classpathentry kind="lib" path="lib/downloaded/commons-codec-1.9.jar"/>
+	<classpathentry kind="lib" path="lib/downloaded/commons-configuration-1.9.jar"/>
+	<classpathentry kind="lib" path="lib/downloaded/commons-csv-1.4.jar"/>
+	<classpathentry kind="lib" path="lib/downloaded/commons-lang-2.6.jar"/>
+	<classpathentry kind="lib" path="lib/downloaded/commons-logging-1.2.jar"/>
+	<classpathentry kind="lib" path="lib/downloaded/log4j-core-2.7.jar"/>
+	<classpathentry kind="lib" path="lib/downloaded/log4j-api-2.7.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
