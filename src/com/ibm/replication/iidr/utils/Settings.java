@@ -47,6 +47,8 @@ public class Settings {
 
 	// Logging parameters
 	public int checkFrequencySeconds = 60;
+	public int connectionResetFrequencyMin = 60;
+
 	public boolean logMetricsToDB = true;
 	public boolean logSubscriptionStatusToDB = true;
 	public boolean logEventsToDB = false;
@@ -101,7 +103,8 @@ public class Settings {
 		PropertiesConfiguration config = new PropertiesConfiguration(
 				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separator + propertiesFile);
 
-		checkFrequencySeconds = config.getInt("checkFrequencySeconds");
+		checkFrequencySeconds = config.getInt("checkFrequencySeconds", checkFrequencySeconds);
+		connectionResetFrequencyMin = config.getInt("connectionResetFrequencyMin", connectionResetFrequencyMin);
 
 		logMetricsToDB = config.getBoolean("logMetricsToDB", logMetricsToDB);
 		logSubscriptionStatusToDB = config.getBoolean("logSubscriptionStatusToDB", logSubscriptionStatusToDB);

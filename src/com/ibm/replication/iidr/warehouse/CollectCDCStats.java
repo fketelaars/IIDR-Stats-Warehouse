@@ -52,6 +52,7 @@ import com.ibm.replication.cdc.scripting.Result;
 import com.ibm.replication.cdc.scripting.ResultStringTable;
 import com.ibm.replication.iidr.utils.Bookmarks;
 import com.ibm.replication.iidr.utils.Settings;
+import com.ibm.replication.iidr.utils.Timer;
 import com.ibm.replication.iidr.utils.Utils;
 import com.ibm.replication.iidr.warehouse.logging.LogCsv;
 import com.ibm.replication.iidr.warehouse.logging.LogDatabase;
@@ -71,6 +72,8 @@ public class CollectCDCStats {
 	boolean connectDatabase = true;
 
 	static Logger logger;
+
+	Timer timer;
 
 	LogDatabase logDatabase;
 	LogCsv logCsv;
@@ -121,6 +124,10 @@ public class CollectCDCStats {
 			bookmarks = new Bookmarks("EventLogBookmarks.properties");
 		}
 
+		// Start the timer thread to flush the output on a regular basis
+		timer = new Timer(settings);
+		new Thread(timer).start();
+
 		// Create a script object to be used to execute CHCCLP commands
 		script = new EmbeddedScript();
 		try {
@@ -138,9 +145,9 @@ public class CollectCDCStats {
 		} catch (Exception e2) {
 			logger.error("Error while collecting status and statistics: " + e2.getMessage());
 		} finally {
+			disconnectServerDS();
 			script.close();
-			if (logDatabase != null)
-				logDatabase.finish();
+			disconnectFromDatabase();
 		}
 	}
 
@@ -151,10 +158,38 @@ public class CollectCDCStats {
 					+ settings.asUserName + " password " + settings.asPassword);
 			logger.info("Connecting to source datastore " + parms.datastore);
 			script.execute("connect datastore name " + parms.datastore + " context source");
+			connectAccessServer = false;
 		} catch (EmbeddedScriptException e) {
 			logger.error("Failed to connect to access server or datastore: " + script.getResultMessage());
 			logger.error("Result Code : " + script.getResultCode());
 		}
+	}
+
+	private void disconnectServerDS() {
+		try {
+			logger.debug("Disconnecting from source datastore " + parms.datastore);
+			script.execute("diconnect datastore name " + parms.datastore);
+		} catch (EmbeddedScriptException ignore) {
+		}
+
+		try {
+			logger.debug("Disconnecting from access server " + settings.asHostName);
+			script.execute("disconnect server");
+		} catch (EmbeddedScriptException ignore) {
+		}
+	}
+
+	private void connectToDatabase()
+			throws IllegalAccessException, InstantiationException, ClassNotFoundException, IOException {
+		if (settings.logEventsToDB || settings.logMetricsToDB || settings.logSubscriptionStatusToDB) {
+			logDatabase = new LogDatabase(settings);
+			connectDatabase = false;
+		}
+	}
+
+	private void disconnectFromDatabase() {
+		if (logDatabase != null)
+			logDatabase.finish();
 	}
 
 	private void processSubscriptions()
@@ -164,15 +199,12 @@ public class CollectCDCStats {
 		// connect to Access Server and the source datastore
 		if (connectAccessServer) {
 			connectServerDS();
-			connectAccessServer = false;
 		}
 
 		// If this is the first time, or when a database error has occurred,
 		// re-establish the connection to the database
-		if (connectDatabase
-				&& (settings.logEventsToDB || settings.logMetricsToDB || settings.logSubscriptionStatusToDB)) {
-			logDatabase = new LogDatabase(settings);
-			connectDatabase = false;
+		if (connectDatabase) {
+			connectToDatabase();
 		}
 
 		// Log to CSV if specified
@@ -203,6 +235,16 @@ public class CollectCDCStats {
 			logger.error("Failed to monitor replication, will reconnect to Access Server and Datastore. Error message: "
 					+ e.getResultCodeAndMessage());
 			connectAccessServer = true;
+		}
+
+		// If the reset timer has been reached, disconnect from the database,
+		// datastore and Access Server
+		if (timer.isConnectionResetDue()) {
+			disconnectServerDS();
+			connectAccessServer = true;
+			disconnectFromDatabase();
+			connectDatabase = true;
+			timer.resetTimer();
 		}
 	}
 
