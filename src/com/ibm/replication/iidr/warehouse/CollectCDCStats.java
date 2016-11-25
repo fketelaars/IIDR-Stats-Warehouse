@@ -31,8 +31,11 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.io.File;
 import java.io.FileNotFoundException;
 
@@ -82,6 +85,9 @@ public class CollectCDCStats {
 	NumberFormat localNumberFormat;
 
 	private volatile boolean keepOn = true;
+
+	HashMap<String, ArrayList<String>> subscriptionMetrics = new HashMap<String, ArrayList<String>>();
+	HashMap<String, LinkedHashMap<String, Integer>> subscriptionMetricsMap = new HashMap<String, LinkedHashMap<String, Integer>>();
 
 	public CollectCDCStats(CollectCDCStatsParms parms)
 			throws ConfigurationException, EmbeddedScriptException, IllegalAccessException, InstantiationException,
@@ -168,7 +174,7 @@ public class CollectCDCStats {
 	private void disconnectServerDS() {
 		try {
 			logger.debug("Disconnecting from source datastore " + parms.datastore);
-			script.execute("diconnect datastore name " + parms.datastore);
+			script.execute("disconnect datastore name " + parms.datastore);
 		} catch (EmbeddedScriptException ignore) {
 		}
 
@@ -342,32 +348,60 @@ public class CollectCDCStats {
 	 */
 	private void logSubscriptionMetrics(String subscriptionName, Timestamp collectTimestamp)
 			throws EmbeddedScriptException, SQLException {
-		logger.debug("Obtaining the metrics of subscription " + subscriptionName);
-		// Which performance metrics are available
-		script.execute("list subscription performance metrics name " + subscriptionName);
-		ResultStringTable availableMetrics = (ResultStringTable) script.getResult();
+
 		ArrayList<String> metricIDList = new ArrayList<String>();
 		LinkedHashMap<String, Integer> metricDescriptionMap = new LinkedHashMap<String, Integer>();
-		String currentGroup = "";
-		for (int r = 0; r < availableMetrics.getRowCount(); r++) {
-			if (availableMetrics.getValueAt(r, 1).isEmpty()) {
-				currentGroup = availableMetrics.getValueAt(r, 0);
-			} else {
-				String metricID = availableMetrics.getValueAt(r, 1);
-				// Only include metric if in include list and not in exclude
-				// list
-				if ((settings.includeMetricsList.isEmpty() || settings.includeMetricsList.contains(metricID))
-						&& !settings.excludeMetricsList.contains(metricID)) {
-					metricIDList.add(availableMetrics.getValueAt(r, 1));
-					metricDescriptionMap.put(currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
-							Integer.parseInt(availableMetrics.getValueAt(r, 1)));
+
+		// If the metrics for the subscriptions have not been retrieved yet, get
+		// metric IDs
+		if (!subscriptionMetrics.containsKey(subscriptionName)) {
+			logger.debug("Obtaining available metrics of subscription " + subscriptionName);
+			// Which performance metrics are available
+			script.execute("list subscription performance metrics name " + subscriptionName);
+			ResultStringTable availableMetrics = (ResultStringTable) script.getResult();
+			String currentGroup = "";
+			for (int r = 0; r < availableMetrics.getRowCount(); r++) {
+				if (availableMetrics.getValueAt(r, 1).isEmpty()) {
+					currentGroup = availableMetrics.getValueAt(r, 0);
+				} else {
+					String metricID = availableMetrics.getValueAt(r, 1);
+					// Only include metric if in include list and not in exclude
+					// list
+					if ((settings.includeMetricsList.isEmpty() || settings.includeMetricsList.contains(metricID))
+							&& !settings.excludeMetricsList.contains(metricID)) {
+						metricIDList.add(availableMetrics.getValueAt(r, 1));
+						metricDescriptionMap.put(currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
+								Integer.parseInt(availableMetrics.getValueAt(r, 1)));
+					}
 				}
 			}
+			// Now check if the metric IDs are actually available
+			try {
+				String metricIDs = StringUtils.join(metricIDList, ",");
+				script.execute("monitor subscription performance name " + subscriptionName + " metricIDs \"" + metricIDs
+						+ "\"");
+			} catch (EmbeddedScriptException e) {
+				if (script.getResultCode() == -2004) {
+					logger.debug(
+							"Invalid metrics found in the list, error message: " + script.getResultCodeAndMessage());
+					metricIDList = removeInvalidMetrics(script.getResultMessage(), metricIDList);
+					// Check the new list of metrics
+					String metricIDs = StringUtils.join(metricIDList, ",");
+					logger.debug("Checking adjusted list of metrics: " + metricIDs);
+					script.execute("monitor subscription performance name " + subscriptionName + " metricIDs \""
+							+ metricIDs + "\"");
+				} else
+					throw new EmbeddedScriptException(script.getResultCode(), script.getResultMessage());
+			}
+
+			logger.debug("Metric IDs for subscription " + subscriptionName + ": " + metricIDList);
+			logger.debug("Metrics map for subscription " + subscriptionName + ": " + metricDescriptionMap);
+			subscriptionMetrics.put(subscriptionName, metricIDList);
+			subscriptionMetricsMap.put(subscriptionName, metricDescriptionMap);
 		}
 
-		String metricIDs = StringUtils.join(metricIDList, ",");
-
-		logger.debug("Metrics map: " + metricDescriptionMap);
+		String metricIDs = StringUtils.join(subscriptionMetrics.get(subscriptionName), ",");
+		metricDescriptionMap = subscriptionMetricsMap.get(subscriptionName);
 
 		// Now get the metrics
 		script.execute(
@@ -400,6 +434,28 @@ public class CollectCDCStats {
 							(long) metricNumber);
 			}
 		}
+	}
+
+	/**
+	 * Removes the invalid metric IDs from the list
+	 * 
+	 * @param resultMessage
+	 *            Error message containing the invalid metrics
+	 * @param metricIDList
+	 *            Metric ID list to be adjusted
+	 * @return Adjusted metric ID list
+	 */
+	private ArrayList<String> removeInvalidMetrics(String resultMessage, ArrayList<String> metricIDList) {
+		ArrayList<String> returnMetricIDList = new ArrayList<String>(metricIDList);
+		Matcher metricsMatcher = Pattern.compile("\\d+(,\\d+)*").matcher(resultMessage);
+		if (metricsMatcher.find()) {
+			String metrics[] = metricsMatcher.group(0).split(",");
+			for (String metricID : metrics) {
+				logger.debug("Removing metric ID " + metricID + " from the list");
+				returnMetricIDList.remove(metricID);
+			}
+		}
+		return returnMetricIDList;
 	}
 
 	/**
