@@ -375,23 +375,26 @@ public class CollectCDCStats {
 					}
 				}
 			}
+			logger.debug("Available metrics reported by engine: " + metricIDList);
 			// Now check if the metric IDs are actually available
-			try {
-				String metricIDs = StringUtils.join(metricIDList, ",");
-				script.execute("monitor subscription performance name " + subscriptionName + " metricIDs \"" + metricIDs
-						+ "\"");
-			} catch (EmbeddedScriptException e) {
-				if (script.getResultCode() == -2004) {
-					logger.debug(
-							"Invalid metrics found in the list, error message: " + script.getResultCodeAndMessage());
-					metricIDList = removeInvalidMetrics(script.getResultMessage(), metricIDList);
-					// Check the new list of metrics
+			boolean metricsChecked = false;
+			while (!metricsChecked) {
+				try {
+					logger.debug("Checking adjusted list of metrics: " + metricIDList);
 					String metricIDs = StringUtils.join(metricIDList, ",");
-					logger.debug("Checking adjusted list of metrics: " + metricIDs);
 					script.execute("monitor subscription performance name " + subscriptionName + " metricIDs \""
 							+ metricIDs + "\"");
-				} else
-					throw new EmbeddedScriptException(script.getResultCode(), script.getResultMessage());
+					// If the program gets here, the metrics were valid
+					metricsChecked = true;
+				} catch (EmbeddedScriptException e) {
+					if (script.getResultCode() == -2004) {
+						logger.debug("Invalid metrics found in the list, error message: "
+								+ script.getResultCodeAndMessage());
+						metricIDList = removeInvalidMetrics(script.getResultMessage(), metricIDList);
+						metricsChecked = false;
+					} else
+						throw new EmbeddedScriptException(script.getResultCode(), script.getResultMessage());
+				}
 			}
 
 			logger.debug("Metric IDs for subscription " + subscriptionName + ": " + metricIDList);
