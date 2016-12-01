@@ -54,6 +54,7 @@ import com.ibm.replication.cdc.scripting.EmbeddedScriptException;
 import com.ibm.replication.cdc.scripting.Result;
 import com.ibm.replication.cdc.scripting.ResultStringTable;
 import com.ibm.replication.iidr.utils.Bookmarks;
+import com.ibm.replication.iidr.utils.MetricsDefinitions;
 import com.ibm.replication.iidr.utils.Settings;
 import com.ibm.replication.iidr.utils.Timer;
 import com.ibm.replication.iidr.utils.Utils;
@@ -70,6 +71,7 @@ public class CollectCDCStats {
 
 	Settings settings;
 	Bookmarks bookmarks;
+	MetricsDefinitions metricsDefinitions;
 
 	boolean connectAccessServer = true;
 	boolean connectDatabase = true;
@@ -198,8 +200,8 @@ public class CollectCDCStats {
 			logDatabase.finish();
 	}
 
-	private void processSubscriptions()
-			throws IllegalAccessException, InstantiationException, ClassNotFoundException, SQLException, IOException {
+	private void processSubscriptions() throws IllegalAccessException, InstantiationException, ClassNotFoundException,
+			SQLException, IOException, ConfigurationException {
 
 		// If this is the first time, or when a connection error has occurred,
 		// connect to Access Server and the source datastore
@@ -255,7 +257,7 @@ public class CollectCDCStats {
 	}
 
 	private void collectSubscriptionInfo(Timestamp collectTimestamp, String subscriptionName, String datastore,
-			String targetDatastore) {
+			String targetDatastore) throws ConfigurationException, FileNotFoundException, IOException {
 		logger.info("Collecting status and statistics for subscription " + subscriptionName + ", replicating from "
 				+ datastore + " to " + targetDatastore);
 		boolean targetConnected = true;
@@ -289,9 +291,13 @@ public class CollectCDCStats {
 
 	/**
 	 * Log subscription status, metrics and event log
+	 * 
+	 * @throws IOException
+	 * @throws FileNotFoundException
+	 * @throws ConfigurationException
 	 */
 	private void logSubscription(String subscriptionName, String datastore, String targetDatastore,
-			Timestamp collectTimestamp) {
+			Timestamp collectTimestamp) throws ConfigurationException, FileNotFoundException, IOException {
 		try {
 			script.execute("select subscription name " + subscriptionName);
 			script.execute("monitor replication filter subscription");
@@ -345,12 +351,18 @@ public class CollectCDCStats {
 
 	/**
 	 * Log the subscription metrics
+	 * 
+	 * @throws IOException
+	 * @throws FileNotFoundException
+	 * @throws ConfigurationException
 	 */
 	private void logSubscriptionMetrics(String subscriptionName, Timestamp collectTimestamp)
-			throws EmbeddedScriptException, SQLException {
+			throws EmbeddedScriptException, SQLException, ConfigurationException, FileNotFoundException, IOException {
 
 		ArrayList<String> metricIDList = new ArrayList<String>();
 		LinkedHashMap<String, Integer> metricDescriptionMap = new LinkedHashMap<String, Integer>();
+		if (metricsDefinitions == null)
+			metricsDefinitions = new MetricsDefinitions();
 
 		// If the metrics for the subscriptions have not been retrieved yet, get
 		// metric IDs
@@ -365,13 +377,14 @@ public class CollectCDCStats {
 					currentGroup = availableMetrics.getValueAt(r, 0);
 				} else {
 					String metricID = availableMetrics.getValueAt(r, 1);
+					String metricDescription = availableMetrics.getValueAt(r, 0).trim();
+					metricsDefinitions.checkAndWriteMetricDefinition(metricID, metricDescription);
 					// Only include metric if in include list and not in exclude
 					// list
 					if ((settings.includeMetricsList.isEmpty() || settings.includeMetricsList.contains(metricID))
 							&& !settings.excludeMetricsList.contains(metricID)) {
 						metricIDList.add(availableMetrics.getValueAt(r, 1));
-						metricDescriptionMap.put(currentGroup + " - " + availableMetrics.getValueAt(r, 0).trim(),
-								Integer.parseInt(availableMetrics.getValueAt(r, 1)));
+						metricDescriptionMap.put(currentGroup + " - " + metricDescription, Integer.parseInt(metricID));
 					}
 				}
 			}
