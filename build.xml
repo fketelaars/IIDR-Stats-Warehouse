@@ -53,7 +53,12 @@
 		</javac>
 	</target>
 
-	<target name="incrementBuild" depends="compile">
+	<target name="removeTestFiles" depends="compile">
+		<delete dir="conf/bookmarks" />
+		<delete dir="log" />
+	</target>
+
+	<target name="incrementBuild" depends="removeTestFiles">
 		<tstamp>
 			<format property="buildDate" pattern="yyyy-MM-dd_HH.mm.ss_zzz" locale="en,IE" />
 		</tstamp>
