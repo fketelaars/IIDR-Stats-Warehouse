@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
 	<classpathentry kind="src" path="src"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/CDC_Access_Server_11.3.3"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="/home/nl45056/Documents/Development/#Libraries/#JDBC/ojdbc6.jar"/>
 	<classpathentry kind="lib" path="lib/downloaded/commons-cli-1.3.1.jar"/>
@@ -12,5 +11,6 @@
 	<classpathentry kind="lib" path="lib/downloaded/log4j-core-2.7.jar"/>
 	<classpathentry kind="lib" path="lib/downloaded/log4j-api-2.7.jar"/>
 	<classpathentry kind="lib" path="/mnt/hgfs/Development/#Libraries/Apache/commons-configuration-1.9/commons-configuration-1.9.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/CDC_Access_Server_11.4"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
