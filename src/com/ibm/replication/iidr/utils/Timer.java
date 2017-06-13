@@ -16,17 +16,13 @@ public class Timer implements Runnable {
 	private boolean stop = false;
 	private boolean stopped = false;
 
-	private int connectionResetFrequencyMin;
-	private long connectionResetFrequency;
-	private Long currentTimerMs;
-	private static final int INTERVALMS = 1000;
+	private Long currentTimer;
+	private static final int INTERVAL = 1000;
 
 	public Timer(Settings settings) {
 		logger = LogManager.getLogger();
 
-		currentTimerMs = new Long(0);
-		connectionResetFrequencyMin = settings.connectionResetFrequencyMin;
-		connectionResetFrequency = connectionResetFrequencyMin * 60 * 1000;
+		currentTimer = new Long(0);
 	}
 
 	/**
@@ -44,20 +40,35 @@ public class Timer implements Runnable {
 	}
 
 	/**
-	 * Returns whether or not the handshake is due (timer interval has been
-	 * reached)
+	 * Returns whether or not the timer-based activity is due (specified in
+	 * seconds)
+	 * 
 	 */
-	public boolean isConnectionResetDue() {
-		return (currentTimerMs >= connectionResetFrequency);
+	public boolean isTimerActivityDueSecs(int intervalSeconds) {
+		if (intervalSeconds <= 0)
+			return false;
+		else
+			return (currentTimer % intervalSeconds) == 0;
 	}
 
 	/**
-	 * Returns whether or not the handshake is due (timer interval has been
-	 * reached)
+	 * Returns whether or not the timer-based activity is due (specified in
+	 * minutes)
+	 * 
+	 */
+	public boolean isTimerActivityDueMins(int intervalMinutes) {
+		if (intervalMinutes <= 0)
+			return false;
+		else
+			return (currentTimer % (intervalMinutes * 60)) == 0;
+	}
+
+	/**
+	 * Returns whether or not the timer interval has been reached
 	 */
 	public void resetTimer() {
-		synchronized (currentTimerMs) {
-			currentTimerMs = 0L;
+		synchronized (currentTimer) {
+			currentTimer = 0L;
 		}
 	}
 
@@ -66,13 +77,12 @@ public class Timer implements Runnable {
 	 * loop until the stop variable is set to true
 	 */
 	public void run() {
-		logger.info("Timer started, connection to the Access Server and source datastore " + "will be reset every "
-				+ connectionResetFrequencyMin + " minutes");
+		logger.info("Timer started, controls interval-based activities");
 		while (!stop) {
 			try {
-				Thread.sleep(INTERVALMS);
-				synchronized (currentTimerMs) {
-					currentTimerMs += INTERVALMS;
+				Thread.sleep(INTERVAL);
+				synchronized (currentTimer) {
+					currentTimer += 1;
 				}
 			} catch (InterruptedException excp) {
 			}

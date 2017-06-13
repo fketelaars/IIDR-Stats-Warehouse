@@ -65,16 +65,17 @@ public class CollectCDCStats {
 
 	private CollectCDCStatsParms parms;
 
-	EmbeddedScript script;
-	Result result;
-	String sqlStatement;
+	private EmbeddedScript script;
+	private Result result;
+	private ResultStringTable subscriptionList;
 
-	Settings settings;
-	Bookmarks bookmarks;
-	MetricsDefinitions metricsDefinitions;
+	private Settings settings;
+	private Bookmarks bookmarks;
+	private MetricsDefinitions metricsDefinitions;
 
-	boolean connectAccessServer = true;
-	boolean connectDatabase = true;
+	private boolean connectAccessServer = true;
+	private boolean connectDatabase = true;
+	private boolean initCsv = true;
 
 	static Logger logger;
 
@@ -132,7 +133,7 @@ public class CollectCDCStats {
 			bookmarks = new Bookmarks("EventLogBookmarks.properties");
 		}
 
-		// Start the timer thread to flush the output on a regular basis
+		// Start the timer thread (controls execution of time-based activities)
 		timer = new Timer(settings);
 		new Thread(timer).start();
 
@@ -141,13 +142,24 @@ public class CollectCDCStats {
 		try {
 			script.open();
 			while (keepOn) {
+				// If the reset timer has been reached, disconnect from the
+				// database and Access Server and rebuild the list of
+				// subscriptions. Also reinitialize CSV writing
+				if (timer.isTimerActivityDueMins(settings.getConnectionResetFrequency())) {
+					connectAccessServer = true;
+					connectDatabase = true;
+					initCsv = true;
+				}
+				// Process the subscriptions one by one to collect the
+				// information
 				processSubscriptions();
-				logger.info("Sleeping for " + settings.checkFrequencySeconds + " seconds");
-				Thread.sleep(settings.checkFrequencySeconds * 1000);
+				// Always sleep for 1 second, the frequency of the operations is
+				// depicted in the properties file
+				Thread.sleep(1000);
 			}
 		} catch (EmbeddedScriptException e1) {
 			logger.error(e1.getMessage());
-			throw new EmbeddedScriptException(99, "Error in running CHCCLP script");
+			throw new EmbeddedScriptException(99, "Error while running CHCCLP script");
 		} catch (InterruptedException e) {
 			logger.info("Stop of program requested");
 		} catch (Exception e2) {
@@ -166,9 +178,15 @@ public class CollectCDCStats {
 					+ settings.asUserName + " password " + settings.asPassword);
 			logger.info("Connecting to source datastore " + parms.datastore);
 			script.execute("connect datastore name " + parms.datastore + " context source");
+			// Reinitialize the list of subscriptions
+			logger.debug("Get list of subscriptions");
+			script.execute("list subscriptions filter datastore");
+			result = script.getResult();
+			subscriptionList = (ResultStringTable) result;
 			connectAccessServer = false;
 		} catch (EmbeddedScriptException e) {
-			logger.error("Failed to connect to access server or datastore: " + script.getResultMessage());
+			logger.error("Failed to connect to access server or datastore, or failed to get list of subscriptions: "
+					+ script.getResultMessage());
 			logger.error("Result Code : " + script.getResultCode());
 		}
 	}
@@ -189,6 +207,10 @@ public class CollectCDCStats {
 
 	private void connectToDatabase()
 			throws IllegalAccessException, InstantiationException, ClassNotFoundException, IOException {
+		// First try to disconnect from the database, in case this is not the
+		// first time
+		disconnectFromDatabase();
+		// Only if events must be logged to database, open the connection
 		if (settings.logEventsToDB || settings.logMetricsToDB || settings.logSubscriptionStatusToDB) {
 			logDatabase = new LogDatabase(settings);
 			connectDatabase = false;
@@ -200,66 +222,57 @@ public class CollectCDCStats {
 			logDatabase.finish();
 	}
 
-	private void processSubscriptions() throws IllegalAccessException, InstantiationException, ClassNotFoundException,
-			SQLException, IOException, ConfigurationException {
-
-		// If this is the first time, or when a connection error has occurred,
-		// connect to Access Server and the source datastore
-		if (connectAccessServer) {
-			connectServerDS();
-		}
-
-		// If this is the first time, or when a database error has occurred,
-		// re-establish the connection to the database
-		if (connectDatabase) {
-			connectToDatabase();
-		}
-
+	private void initializeCsv() {
 		// Log to CSV if specified
 		if (settings.logEventsToCsv || settings.logMetricsToCsv || settings.logSubscriptionStatusToCsv)
 			logCsv = new LogCsv(settings);
+	}
+
+	private void processSubscriptions() throws IllegalAccessException, InstantiationException, ClassNotFoundException,
+			SQLException, IOException, ConfigurationException {
+
+		// If this is the first time, or when triggered by an interval or
+		// connection error, connect to Access Server and the source datastore
+		if (connectAccessServer)
+			connectServerDS();
+
+		// If this is the first time, or when triggered by an interval or
+		// database error, re-establish the connection to the database
+		if (connectDatabase)
+			connectToDatabase();
+
+		// If this is the first time, or when triggered by an interval,
+		// reinitialize CSV processing
+		if (initCsv)
+			initializeCsv();
 
 		// Get current timestamp
 		Calendar cal = Calendar.getInstance();
 		Timestamp collectTimestamp = new Timestamp(cal.getTimeInMillis());
 
-		try {
-			// Subscription routine
-			logger.debug("Get list of subscriptions");
-			script.execute("list subscriptions filter datastore");
-			result = script.getResult();
-			ResultStringTable subscriptionList = (ResultStringTable) result;
-			for (int i = 0; i < subscriptionList.getRowCount(); i++) {
-				String subscriptionName = subscriptionList.getValueAt(i, "SUBSCRIPTION");
-				String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
-				// Collect status and metrics for subscription (if selected)
+		// Process all subscriptions listed before and retrieve info if
+		// triggered
+		for (int i = 0; i < subscriptionList.getRowCount(); i++) {
+			String subscriptionName = subscriptionList.getValueAt(i, "SUBSCRIPTION");
+			String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
+			// Collect status and metrics for subscription (if selected and
+			// triggered by timer)
+			if (timer.isTimerActivityDueSecs(settings.getSubscriptionCheckFrequency(subscriptionName))) {
 				if (parms.subscriptionList == null || parms.subscriptionList.contains(subscriptionName))
 					collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
 				else
 					logger.debug(
 							"Subscription " + subscriptionName + " skipped, not in list of selected subscriptions");
 			}
-		} catch (EmbeddedScriptException e) {
-			logger.error("Failed to monitor replication, will reconnect to Access Server and Datastore. Error message: "
-					+ e.getResultCodeAndMessage());
-			connectAccessServer = true;
 		}
 
-		// If the reset timer has been reached, disconnect from the database,
-		// datastore and Access Server
-		if (timer.isConnectionResetDue()) {
-			disconnectServerDS();
-			connectAccessServer = true;
-			disconnectFromDatabase();
-			connectDatabase = true;
-			timer.resetTimer();
-		}
 	}
 
 	private void collectSubscriptionInfo(Timestamp collectTimestamp, String subscriptionName, String datastore,
 			String targetDatastore) throws ConfigurationException, FileNotFoundException, IOException {
 		logger.info("Collecting status and statistics for subscription " + subscriptionName + ", replicating from "
 				+ datastore + " to " + targetDatastore);
+
 		boolean targetConnected = true;
 		// If target datastore different from source, connect to it
 		if (!datastore.equals(targetDatastore)) {

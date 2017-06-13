@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 
 import org.apache.commons.configuration.*;
+import org.apache.commons.configuration.reloading.FileChangedReloadingStrategy;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -46,8 +47,8 @@ public class Settings {
 	static Logger logger;
 
 	// Logging parameters
-	public int checkFrequencySeconds = 60;
-	public int connectionResetFrequencyMin = 60;
+	private int checkFrequencySeconds = 60;
+	private int connectionResetFrequencyMin = 60;
 
 	public boolean logMetricsToDB = true;
 	public boolean logSubscriptionStatusToDB = true;
@@ -82,6 +83,8 @@ public class Settings {
 	public ArrayList<String> includeMetricsList;
 	public ArrayList<String> excludeMetricsList;
 
+	PropertiesConfiguration config = null;
+
 	/**
 	 * Retrieve the settings from the given properties file.
 	 * 
@@ -93,18 +96,25 @@ public class Settings {
 	public Settings(String propertiesFile) throws ConfigurationException, FileNotFoundException, IOException {
 
 		logger = LogManager.getLogger();
-		loadProperties(propertiesFile);
+		// Prepare the loading of the properties
+		config = new PropertiesConfiguration(
+				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separator + propertiesFile);
+		// Certain properties such as the check frequency can be changed
+		// dynamically without having to restart the collection altogether. When
+		// a change in the properties file is, these properties are
+		// automatically reloaded. To avoid hammering the properties file, the
+		// reload frequency is maximized to every 10 seconds
+		FileChangedReloadingStrategy reloadingStrategy = new FileChangedReloadingStrategy();
+		reloadingStrategy.setRefreshDelay(10000);
+		config.setReloadingStrategy(reloadingStrategy);
+		// Load the static properties
+		loadStaticProperties();
 	}
 
 	/**
-	 * Load the properties
+	 * Load the static properties
 	 */
-	private void loadProperties(String propertiesFile) throws ConfigurationException {
-		PropertiesConfiguration config = new PropertiesConfiguration(
-				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separator + propertiesFile);
-
-		checkFrequencySeconds = config.getInt("checkFrequencySeconds", checkFrequencySeconds);
-		connectionResetFrequencyMin = config.getInt("connectionResetFrequencyMin", connectionResetFrequencyMin);
+	private void loadStaticProperties() throws ConfigurationException {
 
 		logMetricsToDB = config.getBoolean("logMetricsToDB", logMetricsToDB);
 		logSubscriptionStatusToDB = config.getBoolean("logSubscriptionStatusToDB", logSubscriptionStatusToDB);
@@ -174,6 +184,35 @@ public class Settings {
 	}
 
 	/**
+	 * Get the frequency by which the statistics and status must be collected
+	 * for the specified subscription. If no subscription-specific value is
+	 * specified, the checkFrequencySeconds value is returned
+	 * 
+	 * @param subscriptionName
+	 *            Name of the subscription
+	 * @return Frequency by which the information must be retrieved for the
+	 *         specified subscription
+	 */
+	public int getSubscriptionCheckFrequency(String subscriptionName) {
+		int subscriptionCheckFrequency = 0;
+		subscriptionCheckFrequency = config.getInt("checkFrequencySeconds." + subscriptionName,
+				config.getInt("checkFrequencySeconds", checkFrequencySeconds));
+		return subscriptionCheckFrequency;
+	}
+
+	/**
+	 * Get the frequency by which the connection to the access server and
+	 * database must be reset; also depicts how often the list of subscriptions
+	 * is retrieved.
+	 * 
+	 * @return Frequency by which the connections are reset and list of
+	 *         subscriptions is retrieved
+	 */
+	public int getConnectionResetFrequency() {
+		return config.getInt("connectionResetFrequencyMin", connectionResetFrequencyMin);
+	}
+
+	/**
 	 * Log the properties in the specified configuration file
 	 * 
 	 * @param config
@@ -187,7 +226,7 @@ public class Settings {
 	}
 
 	public static void main(String[] args) throws ConfigurationException, IllegalArgumentException,
-			IllegalAccessException, FileNotFoundException, IOException {
+			IllegalAccessException, FileNotFoundException, IOException, InterruptedException {
 		System.setProperty("log4j.configurationFile",
 				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separatorChar + "log4j2.xml");
 		LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
@@ -195,7 +234,17 @@ public class Settings {
 		LoggerConfig loggerConfig = config.getLoggerConfig("com.ibm.replication.iidr.utils.Settings");
 		loggerConfig.setLevel(Level.DEBUG);
 		ctx.updateLoggers();
-		new Settings("CollectCDCStats.properties");
+		Settings settings = new Settings("CollectCDCStats.properties");
+		// Test the timer
+		Timer timer = new Timer(settings);
+		new Thread(timer).start();
+		for (int i = 0; i < 10000; i++) {
+			if (timer.isTimerActivityDueMins(settings.getConnectionResetFrequency()))
+				logger.debug("Reconnection will be performed");
+			if (timer.isTimerActivityDueSecs(settings.getSubscriptionCheckFrequency("AAA")))
+				logger.debug("Subscription activity collection for AAA will be performed");
+			Thread.sleep(1000);
+		}
 	}
 
 }
