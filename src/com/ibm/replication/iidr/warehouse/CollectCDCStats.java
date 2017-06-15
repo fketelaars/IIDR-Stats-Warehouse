@@ -172,10 +172,14 @@ public class CollectCDCStats {
 	}
 
 	private void connectServerDS() {
+		// First disconnect before trying to connect
+		disconnectServerDS();
+		// Connect to the Access Server, datastore and retrieve list of
+		// subscriptions
 		try {
 			logger.info("Connecting to the access server " + settings.asHostName);
 			script.execute("connect server hostname " + settings.asHostName + " port " + settings.asPort + " username "
-					+ settings.asUserName + " password " + settings.asPassword);
+					+ settings.asUserName + " password \"" + settings.asPassword + "\"");
 			logger.info("Connecting to source datastore " + parms.datastore);
 			script.execute("connect datastore name " + parms.datastore + " context source");
 			// Reinitialize the list of subscriptions
@@ -531,14 +535,15 @@ public class CollectCDCStats {
 		int lastRow = 0;
 		for (int r = 1; r < eventTable.getRowCount(); r++) {
 			String origEventTimestamp = eventTable.getValueAt(r, "TIME");
-			String eventTimestamp = Utils.convertLogDateToIso(origEventTimestamp);
+			String eventTimestamp = Utils.convertLogDateToIso(origEventTimestamp, settings.eventLogTimestampFormat);
 			if (eventTimestamp.compareTo(lastLoggedTimestamp) > 0)
 				lastRow = r;
 		}
 		// Now that the earliest event to be logged has been found, start
 		// logging
 		for (int r = lastRow; r > 0; r--) {
-			String eventTimestamp = Utils.convertLogDateToIso(eventTable.getValueAt(r, "TIME"));
+			String eventTimestamp = Utils.convertLogDateToIso(eventTable.getValueAt(r, "TIME"),
+					settings.eventLogTimestampFormat);
 			logger.debug("Event logged: " + datastore + "|" + subscriptionName + "|" + sourceTarget + "|"
 					+ eventTable.getValueAt(r, "EVENT ID") + "|" + eventTable.getValueAt(r, "TYPE") + "|"
 					+ eventTimestamp + "|" + eventTable.getValueAt(r, "MESSAGE"));
@@ -559,8 +564,8 @@ public class CollectCDCStats {
 
 		// Only set arguments when testing
 		if (args.length == 1 && args[0].equalsIgnoreCase("*Testing*")) {
-			// args = "-d -ds CDC_DB2".split(" ");
-			args = "-d -ds CDC_DB2 -s CDC_BD,CDC_BS".split(" ");
+			args = "-d -ds DB2".split(" ");
+			// args = "-d -ds DB2 -s CDC_BD,CDC_BS".split(" ");
 			// args = "-d".split(" ");
 		}
 

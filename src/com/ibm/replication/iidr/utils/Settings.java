@@ -79,6 +79,9 @@ public class Settings {
 	// CSV logging parameters
 	public String csvSeparator = "|";
 
+	// Format of the timestamp in the event log (for conversion to ISO)
+	public String eventLogTimestampFormat = "MMM dd, yyyy hh:mm:ss a";
+
 	// Which metrics to include/exclude
 	public ArrayList<String> includeMetricsList;
 	public ArrayList<String> excludeMetricsList;
@@ -178,6 +181,9 @@ public class Settings {
 
 		// CSV logging settings
 		csvSeparator = config.getString("csvSeparator", csvSeparator);
+		
+		// Event log timestamp format for conversion to ISO
+		eventLogTimestampFormat = config.getString("eventLogTimestampFormat", eventLogTimestampFormat);
 
 		// Now report the settings
 		logSettings(config);
