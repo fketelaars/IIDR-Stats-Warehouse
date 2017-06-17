@@ -186,7 +186,10 @@ public class CollectCDCStats {
 			logger.debug("Get list of subscriptions");
 			script.execute("list subscriptions filter datastore");
 			result = script.getResult();
-			subscriptionList = (ResultStringTable) result;
+			if (result instanceof ResultStringTable)
+				subscriptionList = (ResultStringTable) result;
+			else
+				logger.warn("No subscriptions found in datastore " + parms.datastore);
 			connectAccessServer = false;
 		} catch (EmbeddedScriptException e) {
 			logger.error("Failed to connect to access server or datastore, or failed to get list of subscriptions: "
@@ -256,17 +259,19 @@ public class CollectCDCStats {
 
 		// Process all subscriptions listed before and retrieve info if
 		// triggered
-		for (int i = 0; i < subscriptionList.getRowCount(); i++) {
-			String subscriptionName = subscriptionList.getValueAt(i, "SUBSCRIPTION");
-			String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
-			// Collect status and metrics for subscription (if selected and
-			// triggered by timer)
-			if (timer.isTimerActivityDueSecs(settings.getSubscriptionCheckFrequency(subscriptionName))) {
-				if (parms.subscriptionList == null || parms.subscriptionList.contains(subscriptionName))
-					collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
-				else
-					logger.debug(
-							"Subscription " + subscriptionName + " skipped, not in list of selected subscriptions");
+		if (subscriptionList instanceof ResultStringTable) {
+			for (int i = 0; i < subscriptionList.getRowCount(); i++) {
+				String subscriptionName = subscriptionList.getValueAt(i, "SUBSCRIPTION");
+				String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
+				// Collect status and metrics for subscription (if selected and
+				// triggered by timer)
+				if (timer.isTimerActivityDueSecs(settings.getSubscriptionCheckFrequency(subscriptionName))) {
+					if (parms.subscriptionList == null || parms.subscriptionList.contains(subscriptionName))
+						collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
+					else
+						logger.debug(
+								"Subscription " + subscriptionName + " skipped, not in list of selected subscriptions");
+				}
 			}
 		}
 
