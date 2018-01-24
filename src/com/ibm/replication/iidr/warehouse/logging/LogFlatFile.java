@@ -8,25 +8,20 @@ import org.apache.logging.log4j.ThreadContext;
 
 import com.ibm.replication.iidr.utils.Settings;
 
-public class LogCsv extends LogInterface {
+public class LogFlatFile extends LogInterface {
 
-	Logger csvLogger;
+	Logger ffLoggerSubscriptionStatus;
+	Logger ffLoggerMetrics;
+	Logger ffLoggerEvent;
 	String statusHeader = null;
 	String metricsHeader = null;
 	String eventsHeader = null;
 
-	String csvSeparator = "|";
-
-	public LogCsv(Settings settings) {
+	public LogFlatFile(Settings settings) {
 		super(settings);
-		csvLogger = LogManager.getLogger(this.getClass());
-		csvSeparator = settings.getString(this.getClass().getName() + ".csvSeparator", csvSeparator);
-		statusHeader = "dataStore" + csvSeparator + "subscriptionName" + csvSeparator + "collectTimestamp"
-				+ csvSeparator + "subscriptionState";
-		metricsHeader = "dataStore" + csvSeparator + "subscriptionName" + csvSeparator + "collectTimestamp"
-				+ csvSeparator + "metricSourceTarget" + csvSeparator + "metricID" + csvSeparator + "metricValue";
-		eventsHeader = "dataStore" + csvSeparator + "subscriptionName" + csvSeparator + csvSeparator + "sourceTarget"
-				+ csvSeparator + "eventID" + csvSeparator + "eventType" + csvSeparator + "eventMessage";
+		ffLoggerSubscriptionStatus = LogManager.getLogger(this.getClass().getName() + ".logSubscriptionStatus");
+		ffLoggerMetrics = LogManager.getLogger(this.getClass().getName() + ".logMetrics");
+		ffLoggerEvent = LogManager.getLogger(this.getClass().getName() + ".logEvent");
 	}
 
 	/**
@@ -35,12 +30,14 @@ public class LogCsv extends LogInterface {
 	@Override
 	public void logSubscriptionStatus(String dataStore, String subscriptionName, Timestamp collectTimestamp,
 			String subscriptionState) {
-		ThreadContext.put("separator", csvSeparator);
+		ThreadContext.clearAll();
 		ThreadContext.put("dataStore", dataStore);
 		ThreadContext.put("subscriptionName", subscriptionName);
 		ThreadContext.put("type", "SubStatus");
 		ThreadContext.put("header", statusHeader);
-		csvLogger.info("ignore", dataStore, subscriptionName, collectTimestamp, subscriptionState);
+		ThreadContext.put("collectTimestamp", collectTimestamp.toString());
+		ThreadContext.put("subscriptionState", subscriptionState);
+		ffLoggerSubscriptionStatus.info("ignore");
 	}
 
 	/**
@@ -49,25 +46,32 @@ public class LogCsv extends LogInterface {
 	@Override
 	public void logMetrics(String dataStore, String subscriptionName, Timestamp collectTimestamp,
 			String metricSourceTarget, int metricID, long metricValue) {
-		ThreadContext.put("separator", csvSeparator);
+		ThreadContext.clearAll();
 		ThreadContext.put("dataStore", dataStore);
 		ThreadContext.put("subscriptionName", subscriptionName);
 		ThreadContext.put("type", "Statistics");
 		ThreadContext.put("header", metricsHeader);
-		csvLogger.info("ignore", dataStore, subscriptionName, collectTimestamp, metricSourceTarget, metricID,
-				metricValue);
+		ThreadContext.put("collectTimestamp", collectTimestamp.toString());
+		ThreadContext.put("metricSourceTarget", metricSourceTarget);
+		ThreadContext.put("metricID", Integer.toString(metricID));
+		ThreadContext.put("metricValue", Long.toString(metricValue));
+		ffLoggerMetrics.info("ignore");
 	}
 
 	@Override
 	public void logEvent(String dataStore, String subscriptionName, String sourceTarget, String eventID,
 			String eventType, String eventTimestamp, String eventMessage) {
-		ThreadContext.put("separator", csvSeparator);
+		ThreadContext.clearAll();
 		ThreadContext.put("dataStore", dataStore);
 		ThreadContext.put("subscriptionName", subscriptionName);
 		ThreadContext.put("type", "Events");
 		ThreadContext.put("header", eventsHeader);
-		csvLogger.info("ignore", dataStore, subscriptionName, sourceTarget, eventID, eventType, eventTimestamp,
-				eventMessage);
+		ThreadContext.put("sourceTarget", sourceTarget);
+		ThreadContext.put("eventID", eventID);
+		ThreadContext.put("eventType", eventType);
+		ThreadContext.put("eventTimestamp", eventTimestamp);
+		ThreadContext.put("eventMessage", eventMessage);
+		ffLoggerEvent.info("ignore");
 	}
 
 	/**
@@ -82,7 +86,7 @@ public class LogCsv extends LogInterface {
 	 */
 	@Override
 	public void finish() {
-		logger.debug("Finalizing processing for logging to CSV");
+		logger.debug("Finalizing processing for logging to flatfile");
 	}
 
 	@Override

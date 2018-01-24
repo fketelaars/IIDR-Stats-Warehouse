@@ -33,9 +33,25 @@ public abstract class LogInterface {
 	 */
 	public abstract void logEvent(String dataStore, String subscriptionName, String sourceTarget, String eventID,
 			String eventType, String eventTimestamp, String eventMessage) throws Exception;
+	
+	/**
+	 * Connect to the logger target
+	 */
+	public abstract void connect() throws Exception;
+	
+	/**
+	 * Disconnect from the logger target
+	 */
+	public abstract void disconnect() throws Exception;
 
+	/**
+	 * Harden the written log records
+	 */
 	public abstract void harden() throws Exception;
 
+	/**
+	 * Final processing
+	 */
 	public abstract void finish() throws Exception;
 
 }

@@ -19,10 +19,23 @@ public class LogDatabase extends LogInterface {
 	private PreparedStatement insertSubMetrics;
 	private PreparedStatement insertEvents;
 
+	String dbUserName;
+	String dbPassword;
+	String dbUrl;
+	String dbDriverName;
+	String dbSchema;
+
 	public LogDatabase(Settings settings)
 			throws IllegalAccessException, InstantiationException, ClassNotFoundException, IOException {
 		super(settings);
-		connectDatabase();
+		dbUserName = settings.getString(this.getClass().getName() + ".dbUserName");
+		dbPassword = settings.getEncryptedString(this.getClass().getName() + ".dbPassword");
+		dbUrl = settings.getString(this.getClass().getName() + ".dbUrl");
+		dbDriverName = settings.getString(this.getClass().getName() + ".dbDriverName");
+		dbSchema = settings.getString(this.getClass().getName() + ".dbSchema");
+
+		connect();
+
 	}
 
 	/**
@@ -34,18 +47,16 @@ public class LogDatabase extends LogInterface {
 	 * @throws InstantiationException
 	 * @throws ClassNotFoundException
 	 */
-	private void connectDatabase()
-			throws IOException, IllegalAccessException, InstantiationException, ClassNotFoundException {
+	public void connect() throws IOException, IllegalAccessException, InstantiationException, ClassNotFoundException {
 		try {
 			Properties props = new Properties();
-			props.put("user", settings.dbUserName);
-			props.put("password", settings.dbPassword);
-			logger.debug("Database URL: " + settings.dbUrl);
-			Class.forName(settings.dbDriverName).newInstance();
-			con = DriverManager.getConnection(settings.dbUrl, props);
+			props.put("user", dbUserName);
+			props.put("password", dbPassword);
+			logger.debug("Database URL: " + dbUrl + ", driver: " + dbDriverName);
+			Class.forName(dbDriverName).newInstance();
+			con = DriverManager.getConnection(dbUrl, props);
 
-			logger.debug(settings.dbDriverName + " Loading");
-			logger.debug("Connecting to url : " + settings.dbUrl + " using user name " + settings.dbUserName);
+			logger.debug("Connecting to url : " + dbUrl + " using user name " + dbUserName);
 			DatabaseMetaData dbmd = con.getMetaData();
 			logger.debug("DatabaseProductName: " + dbmd.getDatabaseProductName());
 			logger.debug("DatabaseProductVersion: " + dbmd.getDatabaseProductVersion());
@@ -54,16 +65,16 @@ public class LogDatabase extends LogInterface {
 			con.setAutoCommit(false);
 		} catch (SQLException esql) {
 			logger.error(esql.toString());
-			disconnectDatabase();
+			disconnect();
 		} catch (ClassNotFoundException esql) {
 			logger.error(esql.toString());
-			disconnectDatabase();
+			disconnect();
 		} catch (Exception e) {
 			logger.error("Connecting to database failed, error: " + e.toString());
 		}
 	}
 
-	private void disconnectDatabase() {
+	public void disconnect() {
 		if (con != null) {
 			try {
 				con.rollback();
@@ -90,7 +101,7 @@ public class LogDatabase extends LogInterface {
 		if (con != null) {
 			// Prepare statement if this is the first time
 			if (insertSubStatus == null)
-				insertSubStatus = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_SUB_STATUS "
+				insertSubStatus = con.prepareStatement("insert into " + dbSchema + ".CDC_SUB_STATUS "
 						+ "(SRC_DATASTORE,SUBSCRIPTION,COLLECT_TS,SUBSCRIPTION_STATUS) " + "VALUES (?,?,?,?)");
 
 			// Write the subscription status into the table
@@ -111,7 +122,7 @@ public class LogDatabase extends LogInterface {
 		// Only try to insert the status if the connection has been established
 		if (con != null) {
 			if (insertSubMetrics == null)
-				insertSubMetrics = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_STATS_ALL "
+				insertSubMetrics = con.prepareStatement("insert into " + dbSchema + ".CDC_STATS_ALL "
 						+ "(SRC_DATASTORE,SUBSCRIPTION,COLLECT_TS,SRC_TGT,METRIC_ID,METRIC_VALUE) "
 						+ "VALUES (?,?,?,?,?,?)");
 
@@ -137,22 +148,22 @@ public class LogDatabase extends LogInterface {
 		// Only try to insert the status if the connection has been established
 		if (con != null) {
 			if (insertEvents == null)
-				insertEvents = con.prepareStatement("insert into " + settings.dbSchema + ".CDC_EVENTS "
+				insertEvents = con.prepareStatement("insert into " + dbSchema + ".CDC_EVENTS "
 						+ "(SRC_DATASTORE,SUBSCRIPTION,SRC_TGT,EVENT_ID,EVENT_TYPE,EVENT_TIMESTAMP,EVENT_MESSAGE) "
 						+ "VALUES (?,?,?,?,?,?,?)");
-		} 
-		
-		// Try to convert event ID to integer
-		int eventID=0;
-		try {
-		eventID=Integer.parseInt(eventIDString);
-		} catch(NumberFormatException e) {
-			logger.error("Error converting event ID "+eventIDString+" to numeric, will be set to 0");
 		}
-		
+
+		// Try to convert event ID to integer
+		int eventID = 0;
+		try {
+			eventID = Integer.parseInt(eventIDString);
+		} catch (NumberFormatException e) {
+			logger.error("Error converting event ID " + eventIDString + " to numeric, will be set to 0");
+		}
+
 		// Try to convert event timestamp to Timestamp
-		Timestamp eventTimestamp=Timestamp.valueOf(eventTimestampString);
-		
+		Timestamp eventTimestamp = Timestamp.valueOf(eventTimestampString);
+
 		// Write the event into the table
 		insertEvents.setString(1, dataStore);
 		insertEvents.setString(2, subscriptionName);
@@ -179,7 +190,7 @@ public class LogDatabase extends LogInterface {
 	@Override
 	public void finish() {
 		logger.debug("Finalizing processing for logging to database");
-		disconnectDatabase();
+		disconnect();
 	}
 
 }
