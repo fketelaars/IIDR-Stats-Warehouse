@@ -60,6 +60,76 @@
 				</Route>
 			</Routes>
 		</Routing>
+
+		<!-- The ffRouting-* routers are used to log the subscription status, statistics 
+			and event logs in a flexible format. Dependent on the context: Subscription 
+			Status, Metrics or Event Log, several context columns will be available, 
+			which can be dynamically placed on the line that is logged to the flat file 
+			in question. -->
+		<Routing name="ffRouting-logSubscriptionStatus">
+			<Routes pattern="${ctx:dataStore}-${ctx:type}">
+				<Route>
+					<RollingFile name="${ctx:dataStore}-${ctx:type}"
+						fileName="${stats-path}/${ctx:dataStore}-${ctx:type}.log"
+						filePattern="${stats-path}/${ctx:dataStore}-${ctx:type}-%d{yyyy-MM-dd-HH}.log.gz">
+						<PatternLayout
+							pattern='%X{collectTimestamp},dataStore="%X{dataStore}",subscriptionName="%X{subscriptionName}",subscriptionState="%X{subscriptionState}"%n' />
+						<Policies>
+							<TimeBasedTriggeringPolicy interval="1"
+								modulate="true" />
+						</Policies>
+						<DefaultRolloverStrategy>
+							<Delete basePath="${stats-path}" maxDepth="1">
+								<IfLastModified age="7d" />
+							</Delete>
+						</DefaultRolloverStrategy>
+					</RollingFile>
+				</Route>
+			</Routes>
+		</Routing>
+		<Routing name="ffRouting-logMetrics">
+			<Routes pattern="${ctx:dataStore}-${ctx:type}">
+				<Route>
+					<RollingFile name="${ctx:dataStore}-${ctx:type}"
+						fileName="${stats-path}/${ctx:dataStore}-${ctx:type}.log"
+						filePattern="${stats-path}/${ctx:dataStore}-${ctx:type}-%d{yyyy-MM-dd-HH}.log.gz">
+						<PatternLayout
+							pattern='%X{collectTimestamp},dataStore="%X{dataStore}",subscriptionName="%X{subscriptionName}",metricSourceTarget="%X{metricSourceTarget}",metricID="%X{metricID}",metricValue="%X{metricValue}"%n' />
+						<Policies>
+							<TimeBasedTriggeringPolicy interval="1"
+								modulate="true" />
+						</Policies>
+						<DefaultRolloverStrategy>
+							<Delete basePath="${stats-path}" maxDepth="1">
+								<IfLastModified age="7d" />
+							</Delete>
+						</DefaultRolloverStrategy>
+					</RollingFile>
+				</Route>
+			</Routes>
+		</Routing>
+		<Routing name="ffRouting-logEvent">
+			<Routes pattern="${ctx:dataStore}-${ctx:type}">
+				<Route>
+					<RollingFile name="${ctx:dataStore}-${ctx:type}"
+						fileName="${stats-path}/${ctx:dataStore}-${ctx:type}.log"
+						filePattern="${stats-path}/${ctx:dataStore}-${ctx:type}-%d{yyyy-MM-dd-HH}.log.gz">
+						<PatternLayout
+							pattern='%X{eventTimestamp},dataStore="%X{dataStore}",subscriptionName="%X{subscriptionName}",sourceTarget="%X{sourceTarget}",eventID="%X{eventID}",eventType="%X{eventType}",eventMessage="%X{eventMessage}"%n' />
+						<Policies>
+							<TimeBasedTriggeringPolicy interval="1"
+								modulate="true" />
+						</Policies>
+						<DefaultRolloverStrategy>
+							<Delete basePath="${stats-path}" maxDepth="1">
+								<IfLastModified age="7d" />
+							</Delete>
+						</DefaultRolloverStrategy>
+					</RollingFile>
+				</Route>
+			</Routes>
+		</Routing>
+
 	</Appenders>
 
 	<Loggers>
@@ -75,6 +145,27 @@
 		<Logger name="com.ibm.replication.iidr.warehouse.logging.LogCsv"
 			level="info" additivity="false">
 			<appender-ref ref="csvRouting" />
+		</Logger>
+
+		<!-- This logger logs subscription status to flat file -->
+		<Logger
+			name="com.ibm.replication.iidr.warehouse.logging.LogFlatFile.logSubscriptionStatus"
+			level="info" additivity="false">
+			<appender-ref ref="ffRouting-logSubscriptionStatus" />
+		</Logger>
+
+		<!-- This logger logs metrics to flat file -->
+		<Logger
+			name="com.ibm.replication.iidr.warehouse.logging.LogFlatFile.logMetrics"
+			level="info" additivity="false">
+			<appender-ref ref="ffRouting-logMetrics" />
+		</Logger>
+
+		<!-- This logger logs events to flat file -->
+		<Logger
+			name="com.ibm.replication.iidr.warehouse.logging.LogFlatFile.logEvent"
+			level="info" additivity="false">
+			<appender-ref ref="ffRouting-logEvent" />
 		</Logger>
 
 		<Root level="debug" additivity="false">

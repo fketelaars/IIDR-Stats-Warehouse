@@ -46,46 +46,6 @@ public class Settings {
 
 	static Logger logger;
 
-	// Logging parameters
-	private int checkFrequencySeconds = 60;
-	private int connectionResetFrequencyMin = 60;
-
-	public boolean logMetricsToDB = true;
-	public boolean logSubscriptionStatusToDB = true;
-	public boolean logEventsToDB = false;
-	public boolean logMetricsToCsv = false;
-	public boolean logSubscriptionStatusToCsv = false;
-	public boolean logEventsToCsv = true;
-
-	public int numberOfEvents = 500;
-
-	// Access Server connection parameters
-	public String asHostName = null;
-	public String asUserName = null;
-	public String asPassword = null;
-	public int asPort = 0;
-
-	// Database connection parameters
-	public String dbHostName;
-	public int dbPort;
-	public String dbDatabase;
-	public String dbUserName;
-	public String dbPassword;
-	public String dbDriverName;
-	public String dbUrl;
-	public String dbSchema;
-	public String sqlUrl;
-
-	// CSV logging parameters
-	public String csvSeparator = "|";
-
-	// Format of the timestamp in the event log (for conversion to ISO)
-	public String eventLogTimestampFormat = "MMM dd, yyyy hh:mm:ss a";
-
-	// Which metrics to include/exclude
-	public ArrayList<String> includeMetricsList;
-	public ArrayList<String> excludeMetricsList;
-
 	PropertiesConfiguration config = null;
 
 	/**
@@ -97,125 +57,134 @@ public class Settings {
 	 * @throws FileNotFoundException
 	 */
 	public Settings(String propertiesFile) throws ConfigurationException, FileNotFoundException, IOException {
-
 		logger = LogManager.getLogger();
 		// Prepare the loading of the properties
 		config = new PropertiesConfiguration(
 				System.getProperty("user.dir") + File.separatorChar + "conf" + File.separator + propertiesFile);
-		// Certain properties such as the check frequency can be changed
-		// dynamically without having to restart the collection altogether. When
-		// a change in the properties file is, these properties are
-		// automatically reloaded. To avoid hammering the properties file, the
-		// reload frequency is maximized to every 10 seconds
+		// Most properties can be changed dynamically without having to restart
+		// the collection altogether. When a change in the properties file is,
+		// the properties are automatically reloaded. To avoid hammering the
+		// properties file, the reload frequency is maximized to every 10
+		// seconds
 		FileChangedReloadingStrategy reloadingStrategy = new FileChangedReloadingStrategy();
 		reloadingStrategy.setRefreshDelay(10000);
 		config.setReloadingStrategy(reloadingStrategy);
-		// Load the static properties
-		loadStaticProperties();
-	}
-
-	/**
-	 * Load the static properties
-	 */
-	private void loadStaticProperties() throws ConfigurationException {
-
-		logMetricsToDB = config.getBoolean("logMetricsToDB", logMetricsToDB);
-		logSubscriptionStatusToDB = config.getBoolean("logSubscriptionStatusToDB", logSubscriptionStatusToDB);
-		logEventsToDB = config.getBoolean("logEventsToDB", logEventsToDB);
-
-		logMetricsToCsv = config.getBoolean("logMetricsToCsv", logMetricsToCsv);
-		logSubscriptionStatusToCsv = config.getBoolean("logSubscriptionStatusToCsv", logSubscriptionStatusToCsv);
-		logEventsToCsv = config.getBoolean("logEventsToCsv", logEventsToCsv);
-
-		// Number of events to retrieve
-		numberOfEvents = config.getInt("numberOfEvents", numberOfEvents);
-
-		// Access Server settings
-		asHostName = config.getString("asHostName");
-		asUserName = config.getString("asUserName");
-		String encryptedAsPassword = config.getString("asPassword");
-		asPort = config.getInt("asPort", 10101);
-
-		// Check if the password has already been encrypted
-		// If not, encrypt and save the properties
-		try {
-			asPassword = Encryptor.decodeAndDecrypt(encryptedAsPassword);
-		} catch (EncryptedDataException e) {
-			logger.debug("Encrypting asPassword");
-			asPassword = encryptedAsPassword;
-			encryptedAsPassword = Encryptor.encryptAndEncode(encryptedAsPassword);
-			config.setProperty("asPassword", encryptedAsPassword);
-			config.save();
-		}
-
-		// Metrics to include
-		// if (includeMetrics.isEmpty())
-		// includeMetricsList = new ArrayList<String>();
-		// else
-		includeMetricsList = new ArrayList<String>(Arrays.asList(config.getStringArray("includeMetrics")));
-		includeMetricsList.removeAll(Arrays.asList(""));
-
-		// Metrics to exclude
-		excludeMetricsList = new ArrayList<String>(Arrays.asList(config.getStringArray("excludeMetrics")));
-		excludeMetricsList.removeAll(Arrays.asList(""));
-
-		// Database connection settings
-		dbHostName = config.getString("dbHostName");
-		dbPort = config.getInt("dbPort");
-		dbDatabase = config.getString("dbDatabase");
-		dbUserName = config.getString("dbUserName");
-		String encryptedDbPassword = config.getString("dbPassword");
-		dbDriverName = config.getString("dbDriverName");
-		dbUrl = config.getString("dbUrl");
-		dbSchema = config.getString("dbSchema");
-
-		try {
-			dbPassword = Encryptor.decodeAndDecrypt(encryptedDbPassword);
-		} catch (EncryptedDataException e) {
-			logger.debug("Encrypting dbPassword");
-			dbPassword = encryptedDbPassword;
-			encryptedDbPassword = Encryptor.encryptAndEncode(encryptedDbPassword);
-			config.setProperty("dbPassword", encryptedDbPassword);
-			config.save();
-		}
-
-		// CSV logging settings
-		csvSeparator = config.getString("csvSeparator", csvSeparator);
-		
-		// Event log timestamp format for conversion to ISO
-		eventLogTimestampFormat = config.getString("eventLogTimestampFormat", eventLogTimestampFormat);
 
 		// Now report the settings
 		logSettings(config);
 	}
 
-	/**
-	 * Get the frequency by which the statistics and status must be collected
-	 * for the specified subscription. If no subscription-specific value is
-	 * specified, the checkFrequencySeconds value is returned
-	 * 
-	 * @param subscriptionName
-	 *            Name of the subscription
-	 * @return Frequency by which the information must be retrieved for the
-	 *         specified subscription
+	/*
+	 * Get the property that contains the value. If a qualified property is
+	 * specified, first the qualified property will be retrieved. If not found,
+	 * the simple property will be retrieved.
 	 */
-	public int getSubscriptionCheckFrequency(String subscriptionName) {
-		int subscriptionCheckFrequency = 0;
-		subscriptionCheckFrequency = config.getInt("checkFrequencySeconds." + subscriptionName,
-				config.getInt("checkFrequencySeconds", checkFrequencySeconds));
-		return subscriptionCheckFrequency;
+	private String getResolvedName(String propertyName) {
+		String resolvedName = null;
+		if (config.containsKey(propertyName))
+			resolvedName = propertyName;
+		else {
+			if (propertyName.contains(".")) {
+				String simpleProperty = propertyName.substring(propertyName.lastIndexOf(".") + 1);
+				if (config.containsKey(simpleProperty))
+					resolvedName = simpleProperty;
+			}
+		}
+		return resolvedName;
 	}
 
-	/**
-	 * Get the frequency by which the connection to the access server and
-	 * database must be reset; also depicts how often the list of subscriptions
-	 * is retrieved.
-	 * 
-	 * @return Frequency by which the connections are reset and list of
-	 *         subscriptions is retrieved
+	/*
+	 * Get String property
 	 */
-	public int getConnectionResetFrequency() {
-		return config.getInt("connectionResetFrequencyMin", connectionResetFrequencyMin);
+	public String getString(String propertyName) {
+		String propertyValue = null;
+		String resolvedName = getResolvedName(propertyName);
+		if (resolvedName != null)
+			propertyValue = config.getString(resolvedName);
+		return propertyValue;
+	}
+
+	/*
+	 * Get String property
+	 */
+	public String getString(String propertyName, String defaultValue) {
+		String propertyValue = defaultValue;
+		String resolvedName = getResolvedName(propertyName);
+		if (resolvedName != null)
+			propertyValue = config.getString(resolvedName);
+		return propertyValue;
+	}
+
+	/*
+	 * Get Encrypted String property
+	 */
+	public String getEncryptedString(String propertyName) {
+		String propertyValue = null;
+		String resolvedName = getResolvedName(propertyName);
+		if (resolvedName != null) {
+			String value = config.getString(resolvedName);
+			try {
+				propertyValue = Encryptor.decodeAndDecrypt(value);
+			} catch (EncryptedDataException e) {
+				logger.debug("Encrypting property " + resolvedName);
+				propertyValue = value;
+				String encryptedValue = Encryptor.encryptAndEncode(value);
+				config.setProperty(resolvedName, encryptedValue);
+				try {
+					config.save();
+				} catch (ConfigurationException e1) {
+					e1.printStackTrace();
+				}
+			}
+		}
+		return propertyValue;
+	}
+
+	// Check if the password has already been encrypted
+	// If not, encrypt and save the properties
+
+	/*
+	 * Get Integer property
+	 */
+	public int getInt(String propertyName) {
+		int propertyValue = 0;
+		String resolvedName = getResolvedName(propertyName);
+		if (resolvedName != null)
+			propertyValue = config.getInt(resolvedName);
+		return propertyValue;
+	}
+
+	/*
+	 * Get Integer property
+	 */
+	public int getInt(String propertyName, int defaultValue) {
+		int propertyValue = defaultValue;
+		String resolvedName = getResolvedName(propertyName);
+		if (resolvedName != null)
+			propertyValue = config.getInt(resolvedName);
+		return propertyValue;
+	}
+
+	/*
+	 * Get String List property
+	 */
+	public ArrayList<String> getStringList(String propertyName) {
+		ArrayList<String> propertyValue = null;
+		String resolvedName = getResolvedName(propertyName);
+		if (resolvedName != null)
+			propertyValue = new ArrayList<String>(Arrays.asList(config.getStringArray(resolvedName)));
+		return propertyValue;
+	}
+
+	/*
+	 * Get String List property
+	 */
+	public ArrayList<String> getStringList(String propertyName, ArrayList<String> defaultValue) {
+		ArrayList<String> propertyValue = defaultValue;
+		String resolvedName = getResolvedName(propertyName);
+		if (resolvedName != null)
+			propertyValue = new ArrayList<String>(Arrays.asList(config.getStringArray(resolvedName)));
+		return propertyValue;
 	}
 
 	/**
@@ -240,17 +209,7 @@ public class Settings {
 		LoggerConfig loggerConfig = config.getLoggerConfig("com.ibm.replication.iidr.utils.Settings");
 		loggerConfig.setLevel(Level.DEBUG);
 		ctx.updateLoggers();
-		Settings settings = new Settings("CollectCDCStats.properties");
-		// Test the timer
-		Timer timer = new Timer(settings);
-		new Thread(timer).start();
-		for (int i = 0; i < 10000; i++) {
-			if (timer.isTimerActivityDueMins(settings.getConnectionResetFrequency()))
-				logger.debug("Reconnection will be performed");
-			if (timer.isTimerActivityDueSecs(settings.getSubscriptionCheckFrequency("AAA")))
-				logger.debug("Subscription activity collection for AAA will be performed");
-			Thread.sleep(1000);
-		}
+		new Settings("CollectCDCStats.properties");
 	}
 
 }
