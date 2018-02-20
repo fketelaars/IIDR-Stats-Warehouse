@@ -374,9 +374,11 @@ public class CollectCDCStats {
 				if (timer.isTimerActivityDueSecs(subscriptionCheckFrequency)) {
 					if (parms.subscriptionList == null || parms.subscriptionList.contains(subscriptionName))
 						collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
+
 					else
 						logger.debug(
 								"Subscription " + subscriptionName + " skipped, not in list of selected subscriptions");
+
 				}
 			}
 		}
@@ -415,6 +417,8 @@ public class CollectCDCStats {
 						"Error disconnecting from target datastore " + targetDatastore + ", you can ignore this error");
 			}
 		}
+
+		logger.info("Finished collecting status and statistics for subscription " + subscriptionName);
 	}
 
 	/**
