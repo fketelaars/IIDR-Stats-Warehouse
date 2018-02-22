@@ -6,6 +6,8 @@
 
 package com.ibm.replication.iidr.utils;
 
+import java.util.HashMap;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -19,10 +21,12 @@ public class Timer implements Runnable {
 	private Long currentTimer;
 	private static final int INTERVAL = 1000;
 
+	private HashMap<String, Long> activityTimer;
+
 	public Timer(Settings settings) {
 		logger = LogManager.getLogger();
-
-		currentTimer = new Long(0);
+		currentTimer = System.currentTimeMillis();
+		activityTimer = new HashMap<String, Long>();
 	}
 
 	/**
@@ -41,14 +45,25 @@ public class Timer implements Runnable {
 
 	/**
 	 * Returns whether or not the timer-based activity is due (specified in
-	 * seconds)
+	 * seconds) for the subscription
 	 * 
 	 */
-	public boolean isTimerActivityDueSecs(int intervalSeconds) {
-		if (intervalSeconds <= 0)
-			return false;
-		else
-			return (currentTimer % intervalSeconds) == 0;
+	public boolean isSubscriptionActivityDue(String datastore, String subscriptionName, int intervalSeconds) {
+		boolean activityDue = false;
+		if (intervalSeconds > 0) {
+			String timerKey = datastore + "-" + subscriptionName;
+			Long lastActivation = activityTimer.get(timerKey);
+			if (lastActivation != null) {
+				if (currentTimer >= (lastActivation + intervalSeconds * 1000)) {
+					activityTimer.put(timerKey, currentTimer);
+					activityDue = true;
+				}
+			} else {
+				activityTimer.put(timerKey, currentTimer);
+				activityDue = true;
+			}
+		}
+		return activityDue;
 	}
 
 	/**
@@ -56,11 +71,21 @@ public class Timer implements Runnable {
 	 * minutes)
 	 * 
 	 */
-	public boolean isTimerActivityDueMins(int intervalMinutes) {
-		if (intervalMinutes <= 0)
-			return false;
-		else
-			return (currentTimer % (intervalMinutes * 60)) == 0;
+	public boolean isTimerActivityDueMins(String timerKey, int intervalMinutes) {
+		boolean activityDue = false;
+		if (intervalMinutes > 0) {
+			Long lastActivation = activityTimer.get(timerKey);
+			if (lastActivation != null) {
+				if (currentTimer >= (lastActivation + intervalMinutes * 60 * 1000)) {
+					activityTimer.put(timerKey, currentTimer);
+					activityDue = true;
+				}
+			} else {
+				activityTimer.put(timerKey, currentTimer);
+				activityDue = true;
+			}
+		}
+		return activityDue;
 	}
 
 	/**
@@ -82,7 +107,7 @@ public class Timer implements Runnable {
 			try {
 				Thread.sleep(INTERVAL);
 				synchronized (currentTimer) {
-					currentTimer += 1;
+					currentTimer = System.currentTimeMillis();
 				}
 			} catch (InterruptedException excp) {
 			}

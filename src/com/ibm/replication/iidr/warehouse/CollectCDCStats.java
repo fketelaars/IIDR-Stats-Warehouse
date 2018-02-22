@@ -147,7 +147,8 @@ public class CollectCDCStats {
 				// If the reset timer has been reached, disconnect from the
 				// loggers and Access Server and rebuild the list of
 				// subscriptions. Also reinitialize loggers
-				if (timer.isTimerActivityDueMins(settings.getInt("connectionResetFrequencyMin", 60))) {
+				if (timer.isTimerActivityDueMins("connectionReset",
+						settings.getInt("connectionResetFrequencyMin", 60))) {
 					connectAccessServer = true;
 					initLoggers = true;
 				}
@@ -188,9 +189,13 @@ public class CollectCDCStats {
 			logger.debug("Get list of subscriptions");
 			script.execute("list subscriptions filter datastore");
 			result = script.getResult();
-			if (result instanceof ResultStringTable)
+			if (result instanceof ResultStringTable) {
 				subscriptionList = (ResultStringTable) result;
-			else
+				ArrayList<String> subscriptions = new ArrayList<String>();
+				for (int i = 0; i < subscriptionList.getRowCount(); i++)
+					subscriptions.add(subscriptionList.getValueAt(i, "SUBSCRIPTION"));
+				logger.debug("Subscriptions for datastore " + parms.datastore + ": " + subscriptions);
+			} else
 				logger.warn("No subscriptions found in datastore " + parms.datastore);
 			connectAccessServer = false;
 		} catch (EmbeddedScriptException e) {
@@ -368,21 +373,17 @@ public class CollectCDCStats {
 				String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
 				// Collect status and metrics for subscription (if selected and
 				// triggered by timer)
-				int subscriptionCheckFrequency = 0;
-				subscriptionCheckFrequency = settings.getInt("checkFrequencySeconds-" + subscriptionName,
-						settings.getInt("checkFrequencySeconds", 60));
-				if (timer.isTimerActivityDueSecs(subscriptionCheckFrequency)) {
-					if (parms.subscriptionList == null || parms.subscriptionList.contains(subscriptionName))
+				if (parms.subscriptionList == null || parms.subscriptionList.contains(subscriptionName)) {
+					int subscriptionCheckFrequency = settings.getInt(
+							"checkFrequencySeconds-" + parms.datastore + "-" + subscriptionName,
+							settings.getInt("checkFrequencySeconds", 60));
+					if (timer.isSubscriptionActivityDue(parms.datastore, subscriptionName, subscriptionCheckFrequency))
 						collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
-
-					else
-						logger.debug(
-								"Subscription " + subscriptionName + " skipped, not in list of selected subscriptions");
-
-				}
+				} else
+					logger.debug(
+							"Subscription " + subscriptionName + " skipped, not in list of selected subscriptions");
 			}
 		}
-
 	}
 
 	private void collectSubscriptionInfo(Timestamp collectTimestamp, String subscriptionName, String datastore,
