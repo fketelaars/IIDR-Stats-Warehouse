@@ -41,6 +41,7 @@ public class CollectCDCStatsParms {
 	public ArrayList<String> subscriptionList;
 	public String propertiesFile;
 	public String loggingConfigurationFile;
+	public ArrayList<String> datastoreList;
 
 	public CollectCDCStatsParms(String[] commandLineArguments) throws CollectCDCStatsParmsException {
 		// Initialize parameters
@@ -68,9 +69,11 @@ public class CollectCDCStatsParms {
 
 		this.debug = commandLine.hasOption("d");
 
+		datastoreList = new ArrayList<>();
 		// Datastore parameter is mandatory
 		if (commandLine.getOptionValue("ds") != null) {
-			datastore = commandLine.getOptionValue("ds");
+			String datastores = commandLine.getOptionValue("ds");
+		    datastoreList = new ArrayList<>(Arrays.asList(datastores.split(","))); // Split multiple datastores
 			if (commandLine.getOptionValue("s") != null) {
 				subscriptions = commandLine.getOptionValue("s");
 				subscriptionList = new ArrayList<String>(Arrays.asList(subscriptions.split(",")));

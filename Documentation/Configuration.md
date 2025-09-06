@@ -45,3 +45,14 @@ The database properties are:
 * com.ibm.replication.iidr.warehouse.logging.LogDatabase.dbUrl: JDBC connection string to use. This string can contain properties from this property file by enclosing them in curly brackets and prefixing them with a $ sign. Example for DB2: `jdbc:db2://${dbHostName}:${dbPort}/${dbDatabase}`
 * com.ibm.replication.iidr.warehouse.logging.LogDatabase.dbSchema: Schema that holds the statistics and status tables
 
+# Email configuration
+If you wish to send alert messages for invalid or failed subscriptions, you need to configure the following mail properties. To use the latest Jakarta Mail JAR, copy it into the opt/downloaded directory.
+
+* mail.smtp.host= Hostname or IP address of the SMTP server  
+* mail.smtp.port= Port number on which the SMTP server listens (e.g., 25, 465, 587)  
+* mail.smtp.auth= Set true if the SMTP server requires authentication, otherwise false  
+* mail.smtp.starttls.enable= Set true to enable TLS encryption for secure connection  
+* mail.sender.email= Sender’s email address used in the "From" field  
+* mail.sender.password= Password or app-specific password of the sender email account  
+* mail.recipient.email= Recipient’s email address where alerts will be sent  
+
