@@ -23,8 +23,12 @@
 
 package com.ibm.replication.iidr.warehouse;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Properties;
 
 import org.apache.commons.cli.*;
 
@@ -42,8 +46,10 @@ public class CollectCDCStatsParms {
 	public String propertiesFile;
 	public String loggingConfigurationFile;
 	public ArrayList<String> datastoreList;
+	public LinkedHashMap<String, ArrayList<String>> datastoreSubscriptionsMap;
 
-	public CollectCDCStatsParms(String[] commandLineArguments) throws CollectCDCStatsParmsException {
+	public CollectCDCStatsParms(String[] commandLineArguments)
+			throws CollectCDCStatsParmsException {
 		// Initialize parameters
 		debug = false;
 		datastore = "";
@@ -53,14 +59,15 @@ public class CollectCDCStatsParms {
 		subscriptions = null;
 
 		options.addOption("d", false, "Show debug messages");
-		options.addOption("ds", true, "Source datastore");
-		options.addOption("s", true, "Subscription(s) to select. If not specified, all subscriptions"
-				+ " of the selected source datastore will be included");
 		options.addOption("p", true,
 				"Properties file (must exist in the conf directory). Default is CollectCDCStats.properties");
 		options.addOption("l", true,
 				"Log4j2 configuration file (must exist in the conf directory). Default is log4j2.xml");
 
+		// NEW: optional switch to point to a different datastore-subs mapping
+		// file
+		options.addOption("cfg", true,
+				"Datastore mapping file in conf (default: DatastoresAndSubscriptions.properties)");
 		try {
 			commandLine = parser.parse(options, commandLineArguments);
 		} catch (ParseException e) {
@@ -69,34 +76,73 @@ public class CollectCDCStatsParms {
 
 		this.debug = commandLine.hasOption("d");
 
-		datastoreList = new ArrayList<>();
-		// Datastore parameter is mandatory
-		if (commandLine.getOptionValue("ds") != null) {
-			String datastores = commandLine.getOptionValue("ds");
-		    datastoreList = new ArrayList<>(Arrays.asList(datastores.split(","))); // Split multiple datastores
-			if (commandLine.getOptionValue("s") != null) {
-				subscriptions = commandLine.getOptionValue("s");
-				subscriptionList = new ArrayList<String>(Arrays.asList(subscriptions.split(",")));
-			}
-			if (commandLine.getOptionValue("p") != null) {
-				propertiesFile = commandLine.getOptionValue("p");
-			} else
-				propertiesFile = "CollectCDCStats.properties";
-
-			if (commandLine.getOptionValue("l") != null) {
-				loggingConfigurationFile = commandLine.getOptionValue("l");
-			} else
-				loggingConfigurationFile = "log4j2.xml";
-
+		if (commandLine.getOptionValue("p") != null) {
+			propertiesFile = commandLine.getOptionValue("p");
 		} else
-			sendInvalidParameterException("Datastore (ds parameter) must be specified");
+			propertiesFile = "CollectCDCStats.properties";
+
+		if (commandLine.getOptionValue("l") != null) {
+			loggingConfigurationFile = commandLine.getOptionValue("l");
+		} else {
+			loggingConfigurationFile = "log4j2.xml";
+	}
+     
+        String cfgFileName = commandLine.getOptionValue("cfg", "DatastoresAndSubscriptions.properties");
+        String mappingFilePath = System.getProperty("user.dir") + File.separatorChar + "conf"
+                + File.separator + cfgFileName;
+
+        loadDatastoresFromFile(mappingFilePath);
+
+       
 
 	}
 
 	// Method to send exception
-	private void sendInvalidParameterException(String message) throws CollectCDCStatsParmsException {
+	private void sendInvalidParameterException(String message)
+		throws CollectCDCStatsParmsException {
 		formatter.printHelp("CollectCDCStats", message, this.options, "", true);
-		throw new CollectCDCStatsParmsException("Error while validating parameters");
+		throw new CollectCDCStatsParmsException(
+				"Error while validating parameters");
 	}
 
+	 private void loadDatastoresFromFile(String mappingFilePath) throws CollectCDCStatsParmsException {
+	        File file = new File(mappingFilePath);
+	        if (!file.exists() || !file.isFile()) {
+	            sendInvalidParameterException("Required file not found: " + mappingFilePath);
+	        }
+
+	        Properties props = new Properties();
+	        try (FileInputStream fis = new FileInputStream(mappingFilePath)) {
+	        	props.load(fis);
+	        } catch (Exception e) {
+	            sendInvalidParameterException("Unable to load " + mappingFilePath + ": " + e.getMessage());
+	        }
+
+	        datastoreSubscriptionsMap = new LinkedHashMap<>();
+	        datastoreList = new ArrayList<>();
+
+	        for (String dsName : props.stringPropertyNames()) {
+	            String raw = props.getProperty(dsName, "").trim();
+
+	            ArrayList<String> subs = null; // null - all subs
+	            if (!raw.isEmpty() && !raw.equals("*")) {
+	                subs = new ArrayList<>();
+	                for (String sub : raw.split(",")) {
+	                    String value = sub.trim();
+	                    if (!value.isEmpty()) subs.add(value);
+	                }
+	                if (subs.isEmpty()) subs = null; // treat as all
+	            }
+
+	            String ds = dsName.trim();
+	            if (!ds.isEmpty()) {
+	                datastoreList.add(ds);
+	                datastoreSubscriptionsMap.put(ds, subs);
+	            }
+	        }
+
+	        if (datastoreList.isEmpty()) {
+	            sendInvalidParameterException(mappingFilePath + " has no datastore entries.");
+	        }
+	    }
 }

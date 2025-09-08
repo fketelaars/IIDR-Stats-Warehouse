@@ -828,6 +828,8 @@ public class CollectCDCStats {
 
 			// Set the current datastore in the parameters
 			parms.datastore = datastore;
+		    parms.subscriptionList = parms.datastoreSubscriptionsMap.get(datastore);
+
 			try {
 				new CollectCDCStats(parms);
 			} catch (Exception e) {
