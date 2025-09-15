@@ -14,3 +14,7 @@ Once the tool has been configured, you can perform collect the statistics using 
 `CollectCDCStats.sh`
 
 The command connects to the Access Server and then the CDC_DB2 datastore. Subsequently, it retrieves the statistics for subscriptions S1, S2 and S3 and then writes them to the database specified in the properties file.
+
+## scheduled script
+
+For scheduled execution, use `CollectStats_Loop.sh`, which automatically re-triggers the process at the desired frequency. The frequency interval can be configured by adjusting the delay parameter in the loop script.
