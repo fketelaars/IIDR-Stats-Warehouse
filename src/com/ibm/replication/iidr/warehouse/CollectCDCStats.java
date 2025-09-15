@@ -97,8 +97,10 @@ public class CollectCDCStats {
 	HashMap<String, LinkedHashMap<String, Integer>> subscriptionMetricsMap = new HashMap<String, LinkedHashMap<String, Integer>>();
 
 	public CollectCDCStats(CollectCDCStatsParms parms)
-			throws ConfigurationException, EmbeddedScriptException, IllegalAccessException, InstantiationException,
-			ClassNotFoundException, SQLException, IOException, CollectCDCStatsParmsException {
+			throws ConfigurationException, EmbeddedScriptException,
+			IllegalAccessException, InstantiationException,
+			ClassNotFoundException, SQLException, IOException,
+			CollectCDCStatsParmsException {
 
 		this.parms = parms;
 
@@ -107,14 +109,17 @@ public class CollectCDCStats {
 
 		logger = LogManager.getLogger();
 
-		logger.info("Version: " + versionInfo.getString("buildVersion") + "." + versionInfo.getString("buildRelease")
-				+ "." + versionInfo.getString("buildMod") + ", date: " + versionInfo.getString("buildDate"));
+		logger.info("Version: " + versionInfo.getString("buildVersion") + "."
+				+ versionInfo.getString("buildRelease") + "."
+				+ versionInfo.getString("buildMod") + ", date: "
+				+ versionInfo.getString("buildDate"));
 
 		// Debug logging?
 		if (parms.debug) {
 			LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
 			Configuration config = ctx.getConfiguration();
-			LoggerConfig loggerConfig = config.getLoggerConfig("com.ibm.replication.iidr");
+			LoggerConfig loggerConfig = config
+					.getLoggerConfig("com.ibm.replication.iidr");
 			loggerConfig.setLevel(Level.DEBUG);
 			ctx.updateLoggers();
 		}
@@ -128,8 +133,9 @@ public class CollectCDCStats {
 
 		// Get current session's locale
 		currentLocale = Locale.getDefault();
-		logger.debug("Current locale (language_country): " + currentLocale.toString()
-				+ ", metrics will be parsed according to this locale");
+		logger.debug(
+				"Current locale (language_country): " + currentLocale.toString()
+						+ ", metrics will be parsed according to this locale");
 		localNumberFormat = NumberFormat.getInstance(currentLocale);
 
 		// Initialize the log bookmarks
@@ -144,32 +150,36 @@ public class CollectCDCStats {
 		try {
 			script.open();
 			while (keepOn) {
-				// If the reset timer has been reached, disconnect from the
-				// loggers and Access Server and rebuild the list of
-				// subscriptions. Also reinitialize loggers
-				if (timer.isTimerActivityDueMins("connectionReset",
-						settings.getInt("connectionResetFrequencyMin", 60))) {
-					connectAccessServer = true;
-					initLoggers = true;
-				}
+				// Also reinitialize loggers
+				connectAccessServer = true;
+				initLoggers = true;
+
 				// Process the subscriptions one by one to collect the
 				// information
 				processSubscriptions();
 				// Always sleep for 1 second, the frequency of the operations is
 				// depicted in the properties file
+			
+				// Sleep for the specified interval
 				Thread.sleep(1000);
+				keepOn = false;
 			}
 		} catch (EmbeddedScriptException e1) {
 			logger.error(e1.getMessage());
-			throw new EmbeddedScriptException(99, "Error while running CHCCLP script");
+			throw new EmbeddedScriptException(99,
+					"Error while running CHCCLP script");
 		} catch (InterruptedException e) {
 			logger.info("Stop of program requested");
 		} catch (Exception e2) {
-			logger.error("Error while collecting status and statistics: " + e2.getMessage());
+			logger.error("Error while collecting status and statistics: "
+					+ e2.getMessage());
 		} finally {
 			finalizeLoggers();
 			disconnectServerDS();
 			script.close();
+			if (timer != null) {
+				timer.stop();
+			}
 		}
 	}
 
@@ -179,12 +189,16 @@ public class CollectCDCStats {
 		// Connect to the Access Server, datastore and retrieve list of
 		// subscriptions
 		try {
-			logger.info("Connecting to the access server " + settings.getString("asHostName"));
-			script.execute("connect server hostname " + settings.getString("asHostName") + " port "
-					+ settings.getInt("asPort") + " username " + settings.getString("asUserName") + " password \""
+			logger.info("Connecting to the access server "
+					+ settings.getString("asHostName"));
+			script.execute("connect server hostname "
+					+ settings.getString("asHostName") + " port "
+					+ settings.getInt("asPort") + " username "
+					+ settings.getString("asUserName") + " password \""
 					+ settings.getEncryptedString("asPassword") + "\"");
 			logger.info("Connecting to source datastore " + parms.datastore);
-			script.execute("connect datastore name " + parms.datastore + " context source");
+			script.execute("connect datastore name " + parms.datastore
+					+ " context source");
 			// Reinitialize the list of subscriptions
 			logger.debug("Get list of subscriptions");
 			script.execute("list subscriptions filter datastore");
@@ -193,27 +207,33 @@ public class CollectCDCStats {
 				subscriptionList = (ResultStringTable) result;
 				ArrayList<String> subscriptions = new ArrayList<String>();
 				for (int i = 0; i < subscriptionList.getRowCount(); i++)
-					subscriptions.add(subscriptionList.getValueAt(i, "SUBSCRIPTION"));
-				logger.debug("Subscriptions for datastore " + parms.datastore + ": " + subscriptions);
+					subscriptions.add(
+							subscriptionList.getValueAt(i, "SUBSCRIPTION"));
+				logger.debug("Subscriptions for datastore " + parms.datastore
+						+ ": " + subscriptions);
 			} else
-				logger.warn("No subscriptions found in datastore " + parms.datastore);
+				logger.warn("No subscriptions found in datastore "
+						+ parms.datastore);
 			connectAccessServer = false;
 		} catch (EmbeddedScriptException e) {
-			logger.error("Failed to connect to access server or datastore, or failed to get list of subscriptions: "
-					+ script.getResultMessage());
+			logger.error(
+					"Failed to connect to access server or datastore, or failed to get list of subscriptions: "
+							+ script.getResultMessage());
 			logger.error("Result Code : " + script.getResultCode());
 		}
 	}
 
 	private void disconnectServerDS() {
 		try {
-			logger.debug("Disconnecting from source datastore " + parms.datastore);
+			logger.debug(
+					"Disconnecting from source datastore " + parms.datastore);
 			script.execute("disconnect datastore name " + parms.datastore);
 		} catch (EmbeddedScriptException ignore) {
 		}
 
 		try {
-			logger.debug("Disconnecting from access server " + settings.getString("asHostName"));
+			logger.debug("Disconnecting from access server "
+					+ settings.getString("asHostName"));
 			script.execute("disconnect server");
 		} catch (EmbeddedScriptException ignore) {
 		}
@@ -230,40 +250,50 @@ public class CollectCDCStats {
 		hardenMethods = new HashMap<String, Method>();
 		finalMethods = new HashMap<String, Method>();
 		// Add subscription status methods to the list of method to execute
-		for (String subscriptionStatusClass : settings.getStringList("logSubscriptionStatusClass",
-				new ArrayList<String>())) {
+		for (String subscriptionStatusClass : settings.getStringList(
+				"logSubscriptionStatusClass", new ArrayList<String>())) {
 			Object loggerClass = loadCheckLogger(subscriptionStatusClass);
 			if (loggerClass != null) {
 				Method loggerMethod = null;
 				try {
-					loggerMethod = loggerClass.getClass().getMethod("logSubscriptionStatus", String.class, String.class,
+					loggerMethod = loggerClass.getClass().getMethod(
+							"logSubscriptionStatus", String.class, String.class,
 							Timestamp.class, String.class);
 				} catch (NoSuchMethodException | SecurityException e) {
 					e.printStackTrace();
 				}
 				if (loggerMethod != null) {
-					if (!subscriptionStatusMethods.containsKey(subscriptionStatusClass)) {
-						logger.debug("Subscription status will be logged using class " + subscriptionStatusClass
-								+ " and method " + loggerMethod.getName());
-						subscriptionStatusMethods.put(subscriptionStatusClass, loggerMethod);
+					if (!subscriptionStatusMethods
+							.containsKey(subscriptionStatusClass)) {
+						logger.debug(
+								"Subscription status will be logged using class "
+										+ subscriptionStatusClass
+										+ " and method "
+										+ loggerMethod.getName());
+						subscriptionStatusMethods.put(subscriptionStatusClass,
+								loggerMethod);
 					}
 				}
 			}
 		}
 		// Add metrics methods to the list of method to execute
-		for (String metricsClass : settings.getStringList("logMetricsClass", new ArrayList<String>())) {
+		for (String metricsClass : settings.getStringList("logMetricsClass",
+				new ArrayList<String>())) {
 			Object loggerClass = loadCheckLogger(metricsClass);
 			if (loggerClass != null) {
 				Method loggerMethod = null;
 				try {
-					loggerMethod = loggerClass.getClass().getMethod("logMetrics", String.class, String.class,
-							Timestamp.class, String.class, int.class, long.class);
+					loggerMethod = loggerClass.getClass().getMethod(
+							"logMetrics", String.class, String.class,
+							Timestamp.class, String.class, int.class,
+							long.class);
 				} catch (NoSuchMethodException | SecurityException e) {
 					e.printStackTrace();
 				}
 				if (loggerMethod != null) {
 					if (!metricsMethods.containsKey(metricsClass)) {
-						logger.debug("Metrics will be logged using class " + metricsClass + " and method "
+						logger.debug("Metrics will be logged using class "
+								+ metricsClass + " and method "
 								+ loggerMethod.getName());
 						metricsMethods.put(metricsClass, loggerMethod);
 					}
@@ -272,19 +302,23 @@ public class CollectCDCStats {
 			}
 		}
 		// Add events methods to the list of method to execute
-		for (String eventsClass : settings.getStringList("logEventsClass", new ArrayList<String>())) {
+		for (String eventsClass : settings.getStringList("logEventsClass",
+				new ArrayList<String>())) {
 			Object loggerClass = loadCheckLogger(eventsClass);
 			if (loggerClass != null) {
 				Method loggerMethod = null;
 				try {
-					loggerMethod = loggerClass.getClass().getMethod("logEvent", String.class, String.class,
-							String.class, String.class, String.class, String.class, String.class);
+					loggerMethod = loggerClass.getClass().getMethod("logEvent",
+							String.class, String.class, String.class,
+							String.class, String.class, String.class,
+							String.class);
 				} catch (NoSuchMethodException | SecurityException e) {
 					e.printStackTrace();
 				}
 				if (loggerMethod != null) {
 					if (!eventsMethods.containsKey(eventsClass)) {
-						logger.debug("Events will be logged using class " + eventsClass + " and method "
+						logger.debug("Events will be logged using class "
+								+ eventsClass + " and method "
 								+ loggerMethod.getName());
 						eventsMethods.put(eventsClass, loggerMethod);
 					}
@@ -302,7 +336,8 @@ public class CollectCDCStats {
 				Method finalMethod = finalMethods.get(loggingClass);
 				try {
 					finalMethod.invoke(loggerObject);
-				} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+				} catch (IllegalAccessException | IllegalArgumentException
+						| InvocationTargetException e) {
 					e.printStackTrace();
 				}
 			}
@@ -323,17 +358,21 @@ public class CollectCDCStats {
 		else {
 			try {
 				ClassLoader classLoader = this.getClass().getClassLoader();
-				Class<?> loggerClassDefinition = classLoader.loadClass(loggerClassName);
-				Constructor<?> constructor = loggerClassDefinition.getConstructor(Settings.class);
+				Class<?> loggerClassDefinition = classLoader
+						.loadClass(loggerClassName);
+				Constructor<?> constructor = loggerClassDefinition
+						.getConstructor(Settings.class);
 				Object loggerClass = constructor.newInstance(settings);
 				loggerClasses.put(loggerClassName, loggerClass);
 				// For every logger, retrieve the harden() and finish() methods
 				Method finalMethod = loggerClass.getClass().getMethod("finish");
 				finalMethods.put(loggerClassName, finalMethod);
-				Method hardenMethod = loggerClass.getClass().getMethod("harden");
+				Method hardenMethod = loggerClass.getClass()
+						.getMethod("harden");
 				hardenMethods.put(loggerClassName, hardenMethod);
 				returnClass = loggerClass;
-			} catch (NoSuchMethodException | SecurityException | ClassNotFoundException e) {
+			} catch (NoSuchMethodException | SecurityException
+					| ClassNotFoundException e) {
 				e.printStackTrace();
 			} catch (InstantiationException e) {
 				e.printStackTrace();
@@ -348,8 +387,9 @@ public class CollectCDCStats {
 		return (returnClass);
 	}
 
-	private void processSubscriptions() throws IllegalAccessException, InstantiationException, ClassNotFoundException,
-			SQLException, IOException, ConfigurationException {
+	private void processSubscriptions() throws IllegalAccessException,
+		InstantiationException, ClassNotFoundException, SQLException,
+		IOException, ConfigurationException {
 
 		// If this is the first time, or when triggered by an interval or
 		// connection error, connect to Access Server and the source datastore
@@ -369,43 +409,57 @@ public class CollectCDCStats {
 		// triggered
 		if (subscriptionList instanceof ResultStringTable) {
 			for (int i = 0; i < subscriptionList.getRowCount(); i++) {
-				String subscriptionName = subscriptionList.getValueAt(i, "SUBSCRIPTION");
-				String targetDatastore = subscriptionList.getValueAt(i, "TARGET DATASTORE");
+				String subscriptionName = subscriptionList.getValueAt(i,
+						"SUBSCRIPTION");
+				String targetDatastore = subscriptionList.getValueAt(i,
+						"TARGET DATASTORE");
 				// Collect status and metrics for subscription (if selected and
 				// triggered by timer)
-				if (parms.subscriptionList == null || parms.subscriptionList.contains(subscriptionName)) {
+				if (parms.subscriptionList == null
+						|| parms.subscriptionList.contains(subscriptionName)) {
 					int subscriptionCheckFrequency = settings.getInt(
-							"checkFrequencySeconds-" + parms.datastore + "-" + subscriptionName,
+							"checkFrequencySeconds-" + parms.datastore + "-"
+									+ subscriptionName,
 							settings.getInt("checkFrequencySeconds", 60));
-					if (timer.isSubscriptionActivityDue(parms.datastore, subscriptionName, subscriptionCheckFrequency))
-						collectSubscriptionInfo(collectTimestamp, subscriptionName, parms.datastore, targetDatastore);
+					if (timer.isSubscriptionActivityDue(parms.datastore,
+							subscriptionName, subscriptionCheckFrequency))
+						collectSubscriptionInfo(collectTimestamp,
+								subscriptionName, parms.datastore,
+								targetDatastore);
 				} else
-					logger.debug(
-							"Subscription " + subscriptionName + " skipped, not in list of selected subscriptions");
+					logger.debug("Subscription " + subscriptionName
+							+ " skipped, not in list of selected subscriptions");
 			}
 		}
 	}
 
-	private void collectSubscriptionInfo(Timestamp collectTimestamp, String subscriptionName, String datastore,
-			String targetDatastore) throws ConfigurationException, FileNotFoundException, IOException {
-		logger.info("Collecting status and statistics for subscription " + subscriptionName + ", replicating from "
-				+ datastore + " to " + targetDatastore);
+	private void collectSubscriptionInfo(Timestamp collectTimestamp,
+		String subscriptionName, String datastore, String targetDatastore)
+		throws ConfigurationException, FileNotFoundException, IOException {
+		logger.info("Collecting status and statistics for subscription "
+				+ subscriptionName + ", replicating from " + datastore + " to "
+				+ targetDatastore);
 
 		boolean targetConnected = true;
 		// If target datastore different from source, connect to it
 		if (!datastore.equals(targetDatastore)) {
 			try {
-				logger.debug("Connecting to target datastore " + targetDatastore);
-				script.execute("connect datastore name " + targetDatastore + " context target");
+				logger.debug(
+						"Connecting to target datastore " + targetDatastore);
+				script.execute("connect datastore name " + targetDatastore
+						+ " context target");
 			} catch (EmbeddedScriptException e) {
-				logger.error("Could not connect to target datastore " + targetDatastore + ", error: "
+				logger.error("Could not connect to target datastore "
+						+ targetDatastore + ", error: "
 						+ e.getResultCodeAndMessage());
-				logger.error("Statistics of subscription " + subscriptionName + " will not be collected");
+				logger.error("Statistics of subscription " + subscriptionName
+						+ " will not be collected");
 				targetConnected = false;
 			}
 		}
 		if (targetConnected) {
-			logSubscription(subscriptionName, datastore, targetDatastore, collectTimestamp);
+			logSubscription(subscriptionName, datastore, targetDatastore,
+					collectTimestamp);
 		}
 
 		// If there was a target datastore that was connected to,
@@ -414,12 +468,14 @@ public class CollectCDCStats {
 			try {
 				script.execute("disconnect datastore name " + targetDatastore);
 			} catch (EmbeddedScriptException e) {
-				logger.debug(
-						"Error disconnecting from target datastore " + targetDatastore + ", you can ignore this error");
+				logger.debug("Error disconnecting from target datastore "
+						+ targetDatastore + ", you can ignore this error");
 			}
 		}
 
-		logger.info("Finished collecting status and statistics for subscription " + subscriptionName);
+		logger.info(
+				"Finished collecting status and statistics for subscription "
+						+ subscriptionName);
 	}
 
 	/**
@@ -429,23 +485,28 @@ public class CollectCDCStats {
 	 * @throws FileNotFoundException
 	 * @throws ConfigurationException
 	 */
-	private void logSubscription(String subscriptionName, String datastore, String targetDatastore,
-			Timestamp collectTimestamp) throws ConfigurationException, FileNotFoundException, IOException {
+	private void logSubscription(String subscriptionName, String datastore,
+		String targetDatastore, Timestamp collectTimestamp)
+		throws ConfigurationException, FileNotFoundException, IOException {
 		try {
 			script.execute("select subscription name " + subscriptionName);
 			script.execute("monitor replication filter subscription");
-			ResultStringTable subscriptionMonitor = (ResultStringTable) script.getResult();
+			ResultStringTable subscriptionMonitor = (ResultStringTable) script
+					.getResult();
 
-			String subscriptionState = subscriptionMonitor.getValueAt(0, "STATE");
+			String subscriptionState = subscriptionMonitor.getValueAt(0,
+					"STATE");
 
 			if (!subscriptionStatusMethods.isEmpty())
-				logSubscriptionStatus(subscriptionName, collectTimestamp, subscriptionMonitor);
+				logSubscriptionStatus(subscriptionName, collectTimestamp,
+						subscriptionMonitor);
 
 			if (!metricsMethods.isEmpty()) {
 				if (subscriptionState.startsWith("Mirror"))
 					logSubscriptionMetrics(subscriptionName, collectTimestamp);
 				else
-					logger.info("Current state for subscription " + subscriptionName + ": " + subscriptionState
+					logger.info("Current state for subscription "
+							+ subscriptionName + ": " + subscriptionState
 							+ ", metrics not logged");
 			}
 
@@ -460,10 +521,13 @@ public class CollectCDCStats {
 			}
 
 		} catch (EmbeddedScriptException e) {
-			logger.error("Error collecting status or statistics from subscription " + subscriptionName + ". Error: "
-					+ e.getResultCodeAndMessage());
+			logger.error(
+					"Error collecting status or statistics from subscription "
+							+ subscriptionName + ". Error: "
+							+ e.getResultCodeAndMessage());
 		} catch (Exception e) {
-			logger.error("Exception: " + e.getMessage() + " while logging. Will attempt to rebuild the loggers");
+			logger.error("Exception: " + e.getMessage()
+					+ " while logging. Will attempt to rebuild the loggers");
 			initLoggers = true;
 		}
 	}
@@ -471,16 +535,19 @@ public class CollectCDCStats {
 	/**
 	 * Log the subscription status
 	 */
-	private void logSubscriptionStatus(String subscriptionName, Timestamp collectTimestamp,
-			ResultStringTable subscriptionStatus) throws Exception {
+	private void logSubscriptionStatus(String subscriptionName,
+		Timestamp collectTimestamp, ResultStringTable subscriptionStatus)
+		throws Exception {
 		logger.debug("Obtaining the state of subscription " + subscriptionName);
 		String subscriptionState = subscriptionStatus.getValueAt(0, "STATE");
-		logger.debug("State of subscription " + subscriptionName + " is " + subscriptionState);
+		logger.debug("State of subscription " + subscriptionName + " is "
+				+ subscriptionState);
 		// Now, call the methods that will log subscription status
 		for (String loggingClass : subscriptionStatusMethods.keySet()) {
 			Object loggerObject = loggerClasses.get(loggingClass);
 			Method loggerMethod = subscriptionStatusMethods.get(loggingClass);
-			loggerMethod.invoke(loggerObject, parms.datastore, subscriptionName, collectTimestamp, subscriptionState);
+			loggerMethod.invoke(loggerObject, parms.datastore, subscriptionName,
+					collectTimestamp, subscriptionState);
 		}
 	}
 
@@ -491,74 +558,95 @@ public class CollectCDCStats {
 	 * @throws FileNotFoundException
 	 * @throws ConfigurationException
 	 */
-	private void logSubscriptionMetrics(String subscriptionName, Timestamp collectTimestamp) throws Exception {
+	private void logSubscriptionMetrics(String subscriptionName,
+		Timestamp collectTimestamp) throws Exception {
 
 		ArrayList<String> metricIDList = new ArrayList<String>();
 		LinkedHashMap<String, Integer> metricDescriptionMap = new LinkedHashMap<String, Integer>();
 		if (metricsDefinitions == null)
 			metricsDefinitions = new MetricsDefinitions();
 
-		ArrayList<String> includeMetricsList = settings.getStringList("includeMetricsList", new ArrayList<String>());
-		ArrayList<String> excludeMetricsList = settings.getStringList("excludeMetricsList", new ArrayList<String>());
+		ArrayList<String> includeMetricsList = settings
+				.getStringList("includeMetricsList", new ArrayList<String>());
+		ArrayList<String> excludeMetricsList = settings
+				.getStringList("excludeMetricsList", new ArrayList<String>());
 
 		// If the metrics for the subscriptions have not been retrieved yet, get
 		// metric IDs
 		if (!subscriptionMetrics.containsKey(subscriptionName)) {
-			logger.debug("Obtaining available metrics of subscription " + subscriptionName);
+			logger.debug("Obtaining available metrics of subscription "
+					+ subscriptionName);
 			// Which performance metrics are available
-			script.execute("list subscription performance metrics name " + subscriptionName);
-			ResultStringTable availableMetrics = (ResultStringTable) script.getResult();
+			script.execute("list subscription performance metrics name "
+					+ subscriptionName);
+			ResultStringTable availableMetrics = (ResultStringTable) script
+					.getResult();
 			String currentGroup = "";
 			for (int r = 0; r < availableMetrics.getRowCount(); r++) {
 				if (availableMetrics.getValueAt(r, 1).isEmpty()) {
 					currentGroup = availableMetrics.getValueAt(r, 0);
 				} else {
 					String metricID = availableMetrics.getValueAt(r, 1);
-					String metricDescription = availableMetrics.getValueAt(r, 0).trim();
-					metricsDefinitions.checkAndWriteMetricDefinition(metricID, metricDescription);
+					String metricDescription = availableMetrics.getValueAt(r, 0)
+							.trim();
+					metricsDefinitions.checkAndWriteMetricDefinition(metricID,
+							metricDescription);
 					// Only include metric if in include list and not in exclude
 					// list
-					if ((includeMetricsList.isEmpty() || includeMetricsList.contains(metricID))
+					if ((includeMetricsList.isEmpty()
+							|| includeMetricsList.contains(metricID))
 							&& !excludeMetricsList.contains(metricID)) {
 						metricIDList.add(availableMetrics.getValueAt(r, 1));
-						metricDescriptionMap.put(currentGroup + " - " + metricDescription, Integer.parseInt(metricID));
+						metricDescriptionMap.put(
+								currentGroup + " - " + metricDescription,
+								Integer.parseInt(metricID));
 					}
 				}
 			}
-			logger.debug("Available metrics reported by engine: " + metricIDList);
+			logger.debug(
+					"Available metrics reported by engine: " + metricIDList);
 			// Now check if the metric IDs are actually available
 			boolean metricsChecked = false;
 			while (!metricsChecked) {
 				try {
-					logger.debug("Checking adjusted list of metrics: " + metricIDList);
+					logger.debug("Checking adjusted list of metrics: "
+							+ metricIDList);
 					String metricIDs = StringUtils.join(metricIDList, ",");
-					script.execute("monitor subscription performance name " + subscriptionName + " metricIDs \""
-							+ metricIDs + "\"");
+					script.execute("monitor subscription performance name "
+							+ subscriptionName + " metricIDs \"" + metricIDs
+							+ "\"");
 					// If the program gets here, the metrics were valid
 					metricsChecked = true;
 				} catch (EmbeddedScriptException e) {
 					if (script.getResultCode() == -2004) {
-						logger.debug("Invalid metrics found in the list, error message: "
-								+ script.getResultCodeAndMessage());
-						metricIDList = removeInvalidMetrics(script.getResultMessage(), metricIDList);
+						logger.debug(
+								"Invalid metrics found in the list, error message: "
+										+ script.getResultCodeAndMessage());
+						metricIDList = removeInvalidMetrics(
+								script.getResultMessage(), metricIDList);
 						metricsChecked = false;
 					} else
-						throw new EmbeddedScriptException(script.getResultCode(), script.getResultMessage());
+						throw new EmbeddedScriptException(
+								script.getResultCode(),
+								script.getResultMessage());
 				}
 			}
 
-			logger.debug("Metric IDs for subscription " + subscriptionName + ": " + metricIDList);
-			logger.debug("Metrics map for subscription " + subscriptionName + ": " + metricDescriptionMap);
+			logger.debug("Metric IDs for subscription " + subscriptionName
+					+ ": " + metricIDList);
+			logger.debug("Metrics map for subscription " + subscriptionName
+					+ ": " + metricDescriptionMap);
 			subscriptionMetrics.put(subscriptionName, metricIDList);
 			subscriptionMetricsMap.put(subscriptionName, metricDescriptionMap);
 		}
 
-		String metricIDs = StringUtils.join(subscriptionMetrics.get(subscriptionName), ",");
+		String metricIDs = StringUtils
+				.join(subscriptionMetrics.get(subscriptionName), ",");
 		metricDescriptionMap = subscriptionMetricsMap.get(subscriptionName);
 
 		// Now get the metrics
-		script.execute(
-				"monitor subscription performance name " + subscriptionName + " metricIDs \"" + metricIDs + "\"");
+		script.execute("monitor subscription performance name "
+				+ subscriptionName + " metricIDs \"" + metricIDs + "\"");
 		ResultStringTable metrics = (ResultStringTable) script.getResult();
 		logger.debug("Number of metrics retrieved: " + metrics.getRowCount());
 
@@ -570,19 +658,22 @@ public class CollectCDCStats {
 			} else {
 				Integer metricID = metricDescriptionMap.get(metric);
 				String metricValue = metrics.getValueAt(r, 1);
-				logger.debug(r + " : " + metricSourceTarget + " - " + metricID + " - " + metric + " - " + metricValue);
+				logger.debug(r + " : " + metricSourceTarget + " - " + metricID
+						+ " - " + metric + " - " + metricValue);
 				Number metricNumber;
 				try {
 					metricNumber = localNumberFormat.parse(metricValue);
 				} catch (ParseException e) {
-					logger.error("Error while parsing value for metric ID " + metricID + ", value is " + metricValue
+					logger.error("Error while parsing value for metric ID "
+							+ metricID + ", value is " + metricValue
 							+ ". Error: " + e.getMessage());
 					metricNumber = 0;
 				}
 				for (String loggingClass : metricsMethods.keySet()) {
 					Object loggerObject = loggerClasses.get(loggingClass);
 					Method loggerMethod = metricsMethods.get(loggingClass);
-					loggerMethod.invoke(loggerObject, parms.datastore, subscriptionName, collectTimestamp,
+					loggerMethod.invoke(loggerObject, parms.datastore,
+							subscriptionName, collectTimestamp,
 							metricSourceTarget, metricID, (long) metricNumber);
 				}
 			}
@@ -592,19 +683,21 @@ public class CollectCDCStats {
 	/**
 	 * Removes the invalid metric IDs from the list
 	 * 
-	 * @param resultMessage
-	 *            Error message containing the invalid metrics
-	 * @param metricIDList
-	 *            Metric ID list to be adjusted
+	 * @param resultMessage Error message containing the invalid metrics
+	 * @param metricIDList  Metric ID list to be adjusted
 	 * @return Adjusted metric ID list
 	 */
-	private ArrayList<String> removeInvalidMetrics(String resultMessage, ArrayList<String> metricIDList) {
-		ArrayList<String> returnMetricIDList = new ArrayList<String>(metricIDList);
-		Matcher metricsMatcher = Pattern.compile("\\d+(,\\d+)*").matcher(resultMessage);
+	private ArrayList<String> removeInvalidMetrics(String resultMessage,
+		ArrayList<String> metricIDList) {
+		ArrayList<String> returnMetricIDList = new ArrayList<String>(
+				metricIDList);
+		Matcher metricsMatcher = Pattern.compile("\\d+(,\\d+)*")
+				.matcher(resultMessage);
 		if (metricsMatcher.find()) {
 			String metrics[] = metricsMatcher.group(0).split(",");
 			for (String metricID : metrics) {
-				logger.debug("Removing metric ID " + metricID + " from the list");
+				logger.debug(
+						"Removing metric ID " + metricID + " from the list");
 				returnMetricIDList.remove(metricID);
 			}
 		}
@@ -619,27 +712,38 @@ public class CollectCDCStats {
 	 * @throws FileNotFoundException
 	 * @throws ConfigurationException
 	 */
-	private void logEvents(String subscriptionName, String sourceDatastore, String targetDatastore)
-			throws Exception, EmbeddedScriptException {
-		logger.debug("Obtaining the log events of subscription " + subscriptionName);
+	private void logEvents(String subscriptionName, String sourceDatastore,
+		String targetDatastore) throws Exception, EmbeddedScriptException {
+		logger.debug(
+				"Obtaining the log events of subscription " + subscriptionName);
 		// Get number of events to retrieve
 		int numberOfEvents = settings.getInt("numberOfEvents", 500);
 		// Log source datastore events
-		script.execute("list datastore events type source count " + numberOfEvents);
-		ResultStringTable sourceDataStoreEvents = (ResultStringTable) script.getResult();
+		script.execute(
+				"list datastore events type source count " + numberOfEvents);
+		ResultStringTable sourceDataStoreEvents = (ResultStringTable) script
+				.getResult();
 		processEvents(sourceDataStoreEvents, sourceDatastore, null, "S");
 
-		script.execute("list datastore events type target count " + numberOfEvents);
-		ResultStringTable targetDataStoreEvents = (ResultStringTable) script.getResult();
+		script.execute(
+				"list datastore events type target count " + numberOfEvents);
+		ResultStringTable targetDataStoreEvents = (ResultStringTable) script
+				.getResult();
 		processEvents(targetDataStoreEvents, targetDatastore, null, "T");
 
-		script.execute("list subscription events type source count " + numberOfEvents);
-		ResultStringTable sourceSubscriptionEvents = (ResultStringTable) script.getResult();
-		processEvents(sourceSubscriptionEvents, sourceDatastore, subscriptionName, "S");
+		script.execute(
+				"list subscription events type source count " + numberOfEvents);
+		ResultStringTable sourceSubscriptionEvents = (ResultStringTable) script
+				.getResult();
+		processEvents(sourceSubscriptionEvents, sourceDatastore,
+				subscriptionName, "S");
 
-		script.execute("list subscription events type target count " + numberOfEvents);
-		ResultStringTable targetSubscriptionEvents = (ResultStringTable) script.getResult();
-		processEvents(targetSubscriptionEvents, sourceDatastore, subscriptionName, "T");
+		script.execute(
+				"list subscription events type target count " + numberOfEvents);
+		ResultStringTable targetSubscriptionEvents = (ResultStringTable) script
+				.getResult();
+		processEvents(targetSubscriptionEvents, sourceDatastore,
+				subscriptionName, "T");
 
 	}
 
@@ -650,37 +754,44 @@ public class CollectCDCStats {
 	 * @throws SQLException
 	 * @throws ArrayIndexOutOfBoundsException
 	 */
-	private void processEvents(ResultStringTable eventTable, String datastore, String subscriptionName,
-			String sourceTarget) throws Exception {
-		String eventLogTimestampFormat = settings.getString("eventLogTimestampFormat", "MMM dd, yyyy hh:mm:ss a");
-		String lastLoggedTimestamp = bookmarks.getEventBookmark(datastore, subscriptionName, sourceTarget);
+	private void processEvents(ResultStringTable eventTable, String datastore,
+		String subscriptionName, String sourceTarget) throws Exception {
+		String eventLogTimestampFormat = settings.getString(
+				"eventLogTimestampFormat", "MMM dd, yyyy hh:mm:ss a");
+		String lastLoggedTimestamp = bookmarks.getEventBookmark(datastore,
+				subscriptionName, sourceTarget);
 		// First find the events which a later timestamp than the bookmark
 		int lastRow = 0;
 		for (int r = 1; r < eventTable.getRowCount(); r++) {
 			String origEventTimestamp = eventTable.getValueAt(r, "TIME");
-			String eventTimestamp = Utils.convertLogDateToIso(origEventTimestamp, eventLogTimestampFormat);
+			String eventTimestamp = Utils.convertLogDateToIso(
+					origEventTimestamp, eventLogTimestampFormat);
 			if (eventTimestamp.compareTo(lastLoggedTimestamp) > 0)
 				lastRow = r;
 		}
 		// Now that the earliest event to be logged has been found, start
 		// logging
 		for (int r = lastRow; r > 0; r--) {
-			String eventTimestamp = Utils.convertLogDateToIso(eventTable.getValueAt(r, "TIME"),
-					eventLogTimestampFormat);
-			logger.debug("Event logged: " + datastore + "|" + subscriptionName + "|" + sourceTarget + "|"
-					+ eventTable.getValueAt(r, "EVENT ID") + "|" + eventTable.getValueAt(r, "TYPE") + "|"
-					+ eventTimestamp + "|" + eventTable.getValueAt(r, "MESSAGE"));
+			String eventTimestamp = Utils.convertLogDateToIso(
+					eventTable.getValueAt(r, "TIME"), eventLogTimestampFormat);
+			logger.debug("Event logged: " + datastore + "|" + subscriptionName
+					+ "|" + sourceTarget + "|"
+					+ eventTable.getValueAt(r, "EVENT ID") + "|"
+					+ eventTable.getValueAt(r, "TYPE") + "|" + eventTimestamp
+					+ "|" + eventTable.getValueAt(r, "MESSAGE"));
 			for (String loggingClass : eventsMethods.keySet()) {
 				Object loggerObject = loggerClasses.get(loggingClass);
 				Method loggerMethod = eventsMethods.get(loggingClass);
-				loggerMethod.invoke(loggerObject, datastore, subscriptionName, sourceTarget,
-						eventTable.getValueAt(r, "EVENT ID"), eventTable.getValueAt(r, "TYPE"), eventTimestamp,
+				loggerMethod.invoke(loggerObject, datastore, subscriptionName,
+						sourceTarget, eventTable.getValueAt(r, "EVENT ID"),
+						eventTable.getValueAt(r, "TYPE"), eventTimestamp,
 						eventTable.getValueAt(r, "MESSAGE"));
 			}
 			lastLoggedTimestamp = eventTimestamp;
 		}
 		// The lastLoggedTimestamp has been kept up to date, now update bookmark
-		bookmarks.writeEventBookmark(datastore, subscriptionName, sourceTarget, lastLoggedTimestamp);
+		bookmarks.writeEventBookmark(datastore, subscriptionName, sourceTarget,
+				lastLoggedTimestamp);
 
 	}
 
@@ -700,21 +811,35 @@ public class CollectCDCStats {
 			parms = new CollectCDCStatsParms(args);
 		} catch (CollectCDCStatsParmsException cpe) {
 			Logger logger = LogManager.getLogger();
-			logger.error("Error while validating parameters: " + cpe.getMessage());
+			logger.error(
+					"Error while validating parameters: " + cpe.getMessage());
 		}
 
 		// Set Log4j properties and get logger
-		System.setProperty("log4j.configurationFile", System.getProperty("user.dir") + File.separatorChar + "conf"
-				+ File.separatorChar + parms.loggingConfigurationFile);
+		System.setProperty("log4j.configurationFile",
+				System.getProperty("user.dir") + File.separatorChar + "conf"
+						+ File.separatorChar + parms.loggingConfigurationFile);
 		Logger logger = LogManager.getLogger();
 
+		
 		// Collect the statistics
-		try {
-			new CollectCDCStats(parms);
-		} catch (Exception e) {
-			// Report the full stack trace for debugging
-			logger.error(Arrays.toString(e.getStackTrace()));
-			logger.error("Error while collecting statistics from CDC: " + e.getMessage());
+		for (String datastore : parms.datastoreList) {
+			logger.info("Processing datastore: " + datastore);
+
+			// Set the current datastore in the parameters
+			parms.datastore = datastore;
+		    parms.subscriptionList = parms.datastoreSubscriptionsMap.get(datastore);
+
+			try {
+				new CollectCDCStats(parms);
+			} catch (Exception e) {
+				// Report the full stack trace for debugging
+				logger.error(Arrays.toString(e.getStackTrace()));
+				logger.error("Error while collecting statistics from CDC: "
+						+ e.getMessage());
+			}
 		}
+		
+		logger.info("Processing completed");
 	}
 }
