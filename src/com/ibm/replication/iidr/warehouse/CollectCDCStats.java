@@ -36,7 +36,9 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.io.File;
@@ -56,11 +58,15 @@ import com.ibm.replication.cdc.scripting.EmbeddedScript;
 import com.ibm.replication.cdc.scripting.EmbeddedScriptException;
 import com.ibm.replication.cdc.scripting.Result;
 import com.ibm.replication.cdc.scripting.ResultStringTable;
+import com.ibm.replication.iidr.utils.AlertEmailer;
 import com.ibm.replication.iidr.utils.Bookmarks;
 import com.ibm.replication.iidr.utils.MetricsDefinitions;
 import com.ibm.replication.iidr.utils.Settings;
+import com.ibm.replication.iidr.utils.SubscriptionAlert;
 import com.ibm.replication.iidr.utils.Timer;
 import com.ibm.replication.iidr.utils.Utils;
+import com.ibm.replication.iidr.warehouse.logging.LogDatabase;
+import com.ibm.replication.iidr.warehouse.logging.LogDatabase.SubAlert;
 
 public class CollectCDCStats {
 
@@ -70,7 +76,7 @@ public class CollectCDCStats {
 	private Result result;
 	private ResultStringTable subscriptionList;
 
-	private Settings settings;
+	private static Settings settings;
 	private Bookmarks bookmarks;
 	private MetricsDefinitions metricsDefinitions;
 
@@ -145,6 +151,10 @@ public class CollectCDCStats {
 		timer = new Timer(settings);
 		new Thread(timer).start();
 
+		AlertEmailer alertMailer = new AlertEmailer(settings);
+
+		SubscriptionAlert alert = SubscriptionAlert.getInstance();
+
 		// Create a script object to be used to execute CHCCLP commands
 		script = new EmbeddedScript();
 		try {
@@ -159,7 +169,15 @@ public class CollectCDCStats {
 				processSubscriptions();
 				// Always sleep for 1 second, the frequency of the operations is
 				// depicted in the properties file
-			
+				if ("PER_DATASTORE".equalsIgnoreCase(settings.getString("email.mode")) && settings.getString("mail.smtp.host") != null 
+				        && !settings.getString("mail.smtp.host").isEmpty()) {
+
+					List<SubAlert> alertssub = alert
+							.getAlertsForDatastore(parms.datastore);
+					alertMailer.sendEmailForDatastore(parms.datastore,
+							alertssub);
+					alert.removeAlertsForDatastore(parms.datastore);
+				}
 				// Sleep for the specified interval
 				Thread.sleep(1000);
 				keepOn = false;
@@ -821,14 +839,14 @@ public class CollectCDCStats {
 						+ File.separatorChar + parms.loggingConfigurationFile);
 		Logger logger = LogManager.getLogger();
 
-		
 		// Collect the statistics
 		for (String datastore : parms.datastoreList) {
 			logger.info("Processing datastore: " + datastore);
 
 			// Set the current datastore in the parameters
 			parms.datastore = datastore;
-		    parms.subscriptionList = parms.datastoreSubscriptionsMap.get(datastore);
+			parms.subscriptionList = parms.datastoreSubscriptionsMap
+					.get(datastore);
 
 			try {
 				new CollectCDCStats(parms);
@@ -838,8 +856,26 @@ public class CollectCDCStats {
 				logger.error("Error while collecting statistics from CDC: "
 						+ e.getMessage());
 			}
+			
 		}
-		
+		//logger.debug("Before if clause main");
+		if ("CONSOLIDATED".equalsIgnoreCase(settings.getString("email.mode")) 
+		        && settings.getString("mail.smtp.host") != null 
+		        && !settings.getString("mail.smtp.host").isEmpty()) {
+
+			// Send consolidated email if there are any alerts
+			//logger.debug("Before alerts clause main");
+			SubscriptionAlert alerts = SubscriptionAlert.getInstance();
+			
+			//logger.debug("Before emailer clause main");
+			AlertEmailer emailer = new AlertEmailer(settings);
+			logger.debug("Before snapshot clause main");
+			Map<String, List<LogDatabase.SubAlert>> toSend = alerts
+					.snapshotAndClear();
+			//logger.debug("Before sendConsolidatedEmail clause main");
+			emailer.sendConsolidatedEmail(toSend);
+		}
+
 		logger.info("Processing completed");
 	}
 }

@@ -7,6 +7,7 @@ In most scenarios you will need to perform a few configuration tasks:
 
 ## Setting the configuration properties
 Update the `conf/CollectCDCStats.properties` file with your favourite editor and set the properties to reflect your environment.
+Update the `conf/DatastoresAndSubscriptions.properties` file with your favourite editor and set the properties to reflect your environment.
 
 ### Access Server properties
 * CDC\_AS\_HOME: Home (main) directory of the Access Server or Management Console. This directory must have a `lib` subdirectory that holds the CHCCLP jar files and a directory with the Java Runtime Engine that will be used for the utility. If your directory path contains blanks or other special characters, please enclose the path in double quotes ("). If you run the utility on Windows, you would typically have to enclose the path in double quotes. Example: `CDC_AS_HOME="C:\Program Files (x86)\IBM\IS CDC MC 1133"`
@@ -56,3 +57,7 @@ If you wish to send alert messages for invalid or failed subscriptions, you need
 * mail.sender.password= Password or app-specific password of the sender email account  
 * mail.recipient.email= Recipient’s email address where alerts will be sent  
 
+# Email Mode
+* PER_DATASTORE – Use this mode if you require an alert email for each datastore individually, containing all inactive and failed subscriptions related to that specific datastore.
+
+* CONSOLIDATED – Use this mode if you require a single consolidated alert email that includes all datastores, listing all inactive and failed subscriptions under each datastore.

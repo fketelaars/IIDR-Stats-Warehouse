@@ -32,14 +32,12 @@ public class MailUtil {
     });
 
     // Create and send email
-	// MimeMessage holds the actual email content
     MimeMessage message = new MimeMessage(session);
     message.setFrom(new InternetAddress(senderEmail));
-    String[] recipientEmails = recipientEmail.split(","); // Assuming recipientEmail contains comma-separated addresses
+     String[] recipientEmails = recipientEmail.split(","); // Assuming recipientEmail contains comma-separated addresses
     for (String email : recipientEmails) {
         message.addRecipient(Message.RecipientType.TO, new InternetAddress(email.trim()));
     }
-
     message.setSubject(subject);
     message.setText(body);
 
