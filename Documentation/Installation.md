@@ -11,8 +11,8 @@ There is a strong dependency of the utility on CDC Access Server (or Management 
 - CDC Engines: 10.2.0 and above (CHCCLP must be supported)
 - CDC Access Server (or Management Console): 11.3.3.3 (CHCCLP must be supported and JRE 1.8 included)
 
-## Compilation
-If you wish to build the toolkit yourself, the easiest method is to use Ant ([https://ant.apache.org/bindownload.cgi](https://ant.apache.org/bindownload.cgi)). 
+## Compilation(Mandatory)
+Build the toolkit, the easiest method is to use Ant ([https://ant.apache.org/bindownload.cgi](https://ant.apache.org/bindownload.cgi)). 
 
 Once you have this installed:
 - Optionally, download new versions of the Apache libraries which are included under `opt/downloaded`
