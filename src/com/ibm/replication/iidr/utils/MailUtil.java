@@ -34,7 +34,10 @@ public class MailUtil {
     // Create and send email
     MimeMessage message = new MimeMessage(session);
     message.setFrom(new InternetAddress(senderEmail));
-    message.addRecipient(Message.RecipientType.TO, new InternetAddress(recipientEmail));
+     String[] recipientEmails = recipientEmail.split(","); // Assuming recipientEmail contains comma-separated addresses
+    for (String email : recipientEmails) {
+        message.addRecipient(Message.RecipientType.TO, new InternetAddress(email.trim()));
+    }
     message.setSubject(subject);
     message.setText(body);
 

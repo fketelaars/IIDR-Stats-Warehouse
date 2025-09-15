@@ -53,7 +53,7 @@ public class AlertEmailer {
 
  // NEW: One email containing all datastores and their alerts
     public void sendConsolidatedEmail(Map<String, List<LogDatabase.SubAlert>> alertsByDatastore) {
-    	logger.debug("Preparing sendConsolidatedEmail");
+    //	logger.debug("Preparing sendConsolidatedEmail");
         if (alertsByDatastore == null || alertsByDatastore.isEmpty()) {
             logger.info("No failed/inactive subscriptions across all datastores in this cycle.");
             return;

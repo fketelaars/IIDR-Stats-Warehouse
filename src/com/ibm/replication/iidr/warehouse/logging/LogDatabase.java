@@ -229,29 +229,6 @@ public class LogDatabase extends LogInterface {
 			con.commit();
 	}
 
-	/**
-	 * Sends an email notification for inactive subscription status.
-	 */
-//	private void sendEmailNotification(String dataStore, String subscriptionName,Timestamp collectTimestamp, String subscriptionState) {
-//	    String subject = "Subscription Status Alert: "+ subscriptionState;
-//	    String body = "The subscription '" + subscriptionName + "' for data store '" + dataStore
-//	            + "' is currently in '" + subscriptionState + "' state.";
-//	 
-//
-//	    try {
-//	        // Use JavaMail API or any other mail utility to send the email
-//	    	if(settings.getString("mail.smtp.host")== null || settings.getString("mail.smtp.host").isEmpty()) {
-//	    		logger.warn("SMTP parameters are not set. Email notification will not be sent.");
-//	            return;
-//	    	}
-//	        MailUtil.sendEmail(settings, subject, body);
-//	        // method uses the settings object from LogInterface 
-//	       // This settings object contains configuration details (e.g., email server, credentials, etc.) required for sending emails.
-//	        logger.info("Email notification sent for subscription: " + subscriptionName);
-//	    } catch (Exception e) {
-//	        logger.error("Failed to send email notification: " + e.getMessage());
-//	    }
-//	}
 
 	/**
 	 * Final processing (disconnect from the database)

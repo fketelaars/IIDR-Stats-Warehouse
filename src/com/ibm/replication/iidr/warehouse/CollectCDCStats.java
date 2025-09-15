@@ -858,21 +858,21 @@ public class CollectCDCStats {
 			}
 			
 		}
-		logger.debug("Before if clause main");
+		//logger.debug("Before if clause main");
 		if ("CONSOLIDATED".equalsIgnoreCase(settings.getString("email.mode")) 
 		        && settings.getString("mail.smtp.host") != null 
 		        && !settings.getString("mail.smtp.host").isEmpty()) {
 
 			// Send consolidated email if there are any alerts
-			logger.debug("Before alerts clause main");
+			//logger.debug("Before alerts clause main");
 			SubscriptionAlert alerts = SubscriptionAlert.getInstance();
 			
-			logger.debug("Before emailer clause main");
+			//logger.debug("Before emailer clause main");
 			AlertEmailer emailer = new AlertEmailer(settings);
 			logger.debug("Before snapshot clause main");
 			Map<String, List<LogDatabase.SubAlert>> toSend = alerts
 					.snapshotAndClear();
-			logger.debug("Before sendConsolidatedEmail clause main");
+			//logger.debug("Before sendConsolidatedEmail clause main");
 			emailer.sendConsolidatedEmail(toSend);
 		}
 
